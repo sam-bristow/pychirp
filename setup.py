@@ -10,7 +10,6 @@ config = {
     'download_url'    : 'http://www.johannes-bergmann.de/',
     'author_email'    : 'mail@johannes-bergmann.de',
     'version'         : '0.0.1',
-    'install_requires': [],
     'packages'        : ['pychirp'],
     'scripts'         : [],
     'name'            : 'pychirp'
