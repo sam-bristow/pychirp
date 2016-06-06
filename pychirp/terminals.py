@@ -128,87 +128,137 @@ class _SubscribeMixin(object):
             self._cv.notifyAll()
 
 
-class _ServiceMixin(object):
-    def __init__(self, async_receive_request_fn, cancel_receive_request_fn, respond_to_request_fn, ignore_request_fn):
-        self._async_receive_request_fn = async_receive_request_fn
-        self._cancel_receive_request_fn = cancel_receive_request_fn
-        self._respond_to_request_fn = respond_to_request_fn
-        self._ignore_request_fn = ignore_request_fn
-        self._request_handler = None
+class _GatherOrServiceMixin(object):
+    def __init__(self, async_receive_scattered_message_fn, cancel_receive_scattered_message_fn, respond_to_scattered_message_fn, ignore_scattered_message_fn):
+        self._async_receive_scattered_message_fn = async_receive_scattered_message_fn
+        self._cancel_receive_scattered_message_fn = cancel_receive_scattered_message_fn
+        self._respond_to_scattered_message_fn = respond_to_scattered_message_fn
+        self._ignore_scattered_message_fn = ignore_scattered_message_fn
+        self._scattered_message_handler_fn = None
 
-    def asyncReceiveRequest(self, completion_handler):
+    def _asyncReceiveScatteredMessage(self, completion_handler):
         def wrapper(err, operation_id, payload):
             completion_handler(err, operation_id, self._payloadToUserFacingDataType(payload, _ProtoMessageType.SCATTER, not err))
-        self._async_receive_request_fn(self.handle, wrapper)
+        self._async_receive_scattered_message_fn(self.handle, wrapper)
 
-    def cancelReceiveRequest(self):
-        self._cancel_receive_request_fn(self.handle)
+    def _cancelReceiveScatteredMessage(self):
+        self._cancel_receive_scattered_message_fn(self.handle)
 
-    def respondToRequest(self, operation_id, data):
-        self._respond_to_request_fn(self.handle, operation_id, self._userFacingDataTypeToPayload(data, _ProtoMessageType.GATHER))
+    def _respondToScatteredMessage(self, operation_id, data):
+        self._respond_to_scattered_message_fn(self.handle, operation_id, self._userFacingDataTypeToPayload(data, _ProtoMessageType.GATHER))
 
-    def ignoreRequest(self, operation_id):
-        self._ignore_request_fn(self.handle, operation_id)
+    def _ignoreScatteredMessage(self, operation_id):
+        self._ignore_scattered_message_fn(self.handle, operation_id)
 
-    def _on_request_received(self, err, operation_id, data):
-        response = self._request_handler(err, data)
+    def _on_scattered_message_received(self, err, operation_id, data):
+        response = self._scattered_message_handler_fn(err, data)
 
         if not err:
             if response is None:
-                self.ignoreRequest(operation_id)
+                self._ignoreScatteredMessage(operation_id)
             else:
-                self.respondToRequest(operation_id, response)
+                self._respondToScatteredMessage(operation_id, response)
 
         if err.error_code != _api.ErrorCodes.CANCELED:
-            self.asyncReceiveRequest(self._on_request_received)
+            self._asyncReceiveScatteredMessage(self._on_scattered_message_received)
+
+    @property
+    def _scattered_message_handler(self):
+        return self._scattered_message_handler_fn
+
+    @_scattered_message_handler.setter
+    def _scattered_message_handler(self, handler_fn):
+        self._cancelReceiveScatteredMessage()
+        self._scattered_message_handler_fn = handler_fn
+        if handler_fn is not None:
+            self._asyncReceiveScatteredMessage(self._on_scattered_message_received)
+
+
+class _GatherMixin(_GatherOrServiceMixin):
+    def __init__(self, async_receive_scattered_message_fn, cancel_receive_scattered_message_fn, respond_to_scattered_message_fn, ignore_scattered_message_fn):
+        _GatherOrServiceMixin.__init__(self, async_receive_scattered_message_fn, cancel_receive_scattered_message_fn, respond_to_scattered_message_fn, ignore_scattered_message_fn)
+
+    def asyncReceiveScatteredMessage(self, completion_handler):
+        self._asyncReceiveScatteredMessage(completion_handler)
+
+    def cancelReceiveScatteredMessage(self):
+        self._cancelReceiveScatteredMessage()
+
+    def respondToScatteredMessage(self, operation_id, data):
+        self._respondToScatteredMessage(operation_id, data)
+
+    def ignoreScatteredMessage(self, operation_id):
+        self._ignoreScatteredMessage(operation_id)
+
+    @property
+    def scattered_message_handler(self):
+        return self._scattered_message_handler
+
+    @scattered_message_handler.setter
+    def scattered_message_handler(self, handler_fn):
+        self._scattered_message_handler = handler_fn
+
+
+class _ServiceMixin(_GatherOrServiceMixin):
+    def __init__(self, async_receive_request_fn, cancel_receive_request_fn, respond_to_request_fn, ignore_request_fn):
+        _GatherOrServiceMixin.__init__(self, async_receive_request_fn, cancel_receive_request_fn, respond_to_request_fn, ignore_request_fn)
+
+    def asyncReceiveRequest(self, completion_handler):
+        self._asyncReceiveScatteredMessage(completion_handler)
+
+    def cancelReceiveRequest(self):
+        self._cancelReceiveScatteredMessage()
+
+    def respondToRequest(self, operation_id, data):
+        self._respondToScatteredMessage(operation_id, data)
+
+    def ignoreRequest(self, operation_id):
+        self._ignoreScatteredMessage(operation_id)
 
     @property
     def request_handler(self):
-        return self._request_handler
+        return self._scattered_message_handler
 
     @request_handler.setter
     def request_handler(self, handler_fn):
-        self.cancelReceiveRequest()
-        self._request_handler = handler_fn
-        if handler_fn is not None:
-            self.asyncReceiveRequest(self._on_request_received)
+        self._scattered_message_handler = handler_fn
 
 
-class _ClientMixin(object):
+class _ScatterOrClientMixin(object):
     Flags = _api.ScatterGatherFlags
     ControlFlow = _api.ControlFlow
 
     class Ignored(Exception):
         def __init__(self):
-            Exception.__init__(self, 'The service ignored the request')
+            Exception.__init__(self, 'The remote terminal ignored the request')
 
     class Deaf(Exception):
         def __init__(self):
-            Exception.__init__(self, 'The service was not listening for requests')
+            Exception.__init__(self, 'The remote terminal was not listening for requests')
 
     class BindingDestroyed(Exception):
         def __init__(self):
-            Exception.__init__(self, 'The service\'s binding got destroyed')
+            Exception.__init__(self, 'The remote terminal\'s binding got destroyed')
 
     class ConnectionLost(Exception):
         def __init__(self):
-            Exception.__init__(self, 'Connection to the service has been lost lost')
+            Exception.__init__(self, 'Connection to the remote terminal has been lost lost')
 
-    def __init__(self, async_request_fn, cancel_request_fn):
-        self._async_request_fn = async_request_fn
-        self._cancel_request_fn = cancel_request_fn
+    def __init__(self, async_scatter_gather_fn, cancel_scatter_gather_fn):
+        self._async_scatter_gather_fn = async_scatter_gather_fn
+        self._cancel_scatter_gather_fn = cancel_scatter_gather_fn
         self._cv = _threading.Condition()
 
-    def asyncRequest(self, data, completion_handler):
+    def _asyncScatterGather(self, data, completion_handler):
         def wrapper(err, operation_id, flags, payload):
             data = self._payloadToUserFacingDataType(payload, _ProtoMessageType.SCATTER, not err and not flags & (self.Flags.BINDING_DESTROYED | self.Flags.CONNECTION_LOST | self.Flags.DEAF | self.Flags.IGNORED))
             return completion_handler(err, operation_id, flags, data)
-        return self._async_request_fn(self.handle, self._userFacingDataTypeToPayload(data, _ProtoMessageType.SCATTER), wrapper)
+        return self._async_scatter_gather_fn(self.handle, self._userFacingDataTypeToPayload(data, _ProtoMessageType.SCATTER), wrapper)
 
-    def cancelRequest(self, operation_id):
-        self._cancel_request_fn(self.handle, operation_id)
+    def _cancelScatterGather(self, operation_id):
+        self._cancel_scatter_gather_fn(self.handle, operation_id)
 
-    def request(self, data, only_first_response=False):
+    def _scatterGather(self, data, only_first_response=False):
         response = {
             'err': None,
             'flags': None,
@@ -232,7 +282,7 @@ class _ClientMixin(object):
                 return self.ControlFlow.CONTINUE
 
         with self._cv:
-            operation_id = self._async_request_fn(self.handle, self._userFacingDataTypeToPayload(data, _ProtoMessageType.SCATTER), completion_handler)
+            operation_id = self._async_scatter_gather_fn(self.handle, self._userFacingDataTypeToPayload(data, _ProtoMessageType.SCATTER), completion_handler)
             self._cv.wait()
 
         if response['err']:
@@ -247,6 +297,34 @@ class _ClientMixin(object):
             raise self.Ignored()
 
         return self._payloadToUserFacingDataType(response['payload'], _ProtoMessageType.GATHER, True)
+
+
+class _ScatterMixin(_ScatterOrClientMixin):
+    def __init__(self, async_scatter_gather_fn, cancel_scatter_gather_fn):
+        _ScatterOrClientMixin.__init__(self, async_scatter_gather_fn, cancel_scatter_gather_fn)
+
+    def asyncScatterGather(self, data, completion_handler):
+        return self._asyncScatterGather(data, completion_handler)
+
+    def cancelScatterGather(self, operation_id):
+        self._cancelScatterGather(operation_id)
+
+    def scatterGather(self, data, only_first_response=False):
+        return self._scatterGather(data, only_first_response)
+
+
+class _ClientMixin(_ScatterOrClientMixin):
+    def __init__(self, async_request_fn, cancel_request_fn):
+        _ScatterOrClientMixin.__init__(self, async_request_fn, cancel_request_fn)
+
+    def asyncRequest(self, data, completion_handler):
+        return self._asyncScatterGather(data, completion_handler)
+
+    def cancelRequest(self, operation_id):
+        self._cancelScatterGather(operation_id)
+
+    def request(self, data, only_first_response=False):
+        return self._scatterGather(data, only_first_response)
 
 
 class _ProtoTerminalMixin(object):
@@ -311,11 +389,11 @@ class PublishSubscribeProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixi
         _ProtoTerminalMixin.__init__(self, PublishSubscribeTerminal, leaf, name, proto_module)
 
 
-class ScatterGatherTerminal(_ServiceMixin, _ClientMixin, _ManualBindTerminal):
+class ScatterGatherTerminal(_ScatterMixin, _GatherMixin, _ManualBindTerminal):
     def __init__(self, leaf, name, signature):
         _ManualBindTerminal.__init__(self, leaf, _api.TerminalTypes.SCATTER_GATHER, name, signature)
-        _ClientMixin.__init__(self, _api.sgAsyncScatterGather, _api.sgCancelScatterGather)
-        _ServiceMixin.__init__(self, _api.sgAsyncReceiveScatteredMessage, _api.sgCancelReceiveScatteredMessage, _api.sgRespondToScatteredMessage, _api.sgIgnoreScatteredMessage)
+        _ScatterMixin.__init__(self, _api.sgAsyncScatterGather, _api.sgCancelScatterGather)
+        _GatherMixin.__init__(self, _api.sgAsyncReceiveScatteredMessage, _api.sgCancelReceiveScatteredMessage, _api.sgRespondToScatteredMessage, _api.sgIgnoreScatteredMessage)
 
 
 class ScatterGatherProtoTerminal(_MakeRequestResponseMessagesMixin, _ProtoTerminalMixin, ScatterGatherTerminal):

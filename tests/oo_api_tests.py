@@ -268,20 +268,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         binding_b = Binding(terminal_b, 'Teacher')
         time.sleep(0.02)
 
-        async_requested = []
+        async_scattered = []
 
-        def receiveRequestCompletionHandler(err, operation_id, payload):
-            async_requested.append({
+        def receiveScatteredMessageCompletionHandler(err, operation_id, payload):
+            async_scattered.append({
                 'err': err,
                 'operation_id': operation_id,
                 'payload': payload
             })
 
-        async_responded = []
+        async_gathered = []
 
-        def makeRequestCompletionHandler(stop):
-            def requestCompletionHandler(err, operation_id, flags, payload):
-                async_responded.append({
+        def makeScatterGatherCompletionHandler(stop):
+            def scatterGatherCompletionHandler(err, operation_id, flags, payload):
+                async_gathered.append({
                     'err': err,
                     'operation_id': operation_id,
                     'flags': flags,
@@ -289,38 +289,38 @@ class ObjectOrientedApiTest(unittest.TestCase):
                 })
                 return ScatterGatherTerminal.ControlFlow.STOP if stop else ScatterGatherTerminal.ControlFlow.CONTINUE
 
-            return requestCompletionHandler
+            return scatterGatherCompletionHandler
 
-        def request(stopAfterFirstGatherMessage=False):
-            while len(async_responded) > 0:
-                async_responded.pop()
+        def scatterGather(stopAfterFirstGatherMessage=False):
+            while len(async_gathered) > 0:
+                async_gathered.pop()
             payload = bytearray([1, 0, 2])
-            operation_id = terminal_c.asyncRequest(payload, makeRequestCompletionHandler(stopAfterFirstGatherMessage))
+            operation_id = terminal_c.asyncScatterGather(payload, makeScatterGatherCompletionHandler(stopAfterFirstGatherMessage))
             time.sleep(0.02)
             return operation_id
 
-        def receiveRequest():
-            while len(async_requested) > 0:
-                async_requested.pop()
-            terminal_a.asyncReceiveRequest(receiveRequestCompletionHandler)
+        def receiveScatteredMessage():
+            while len(async_scattered) > 0:
+                async_scattered.pop()
+            terminal_a.asyncReceiveScatteredMessage(receiveScatteredMessageCompletionHandler)
 
         # check that the completion handler can be called more than once for a single operation
-        operation_id = request()
+        operation_id = scatterGather()
 
-        self.assertEquals(2, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertEquals(operation_id, async_responded[1]['operation_id'])
-        self.assertFalse(async_responded[0]['err'])
-        self.assertFalse(async_responded[1]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
-        self.assertEquals(bytearray(), async_responded[1]['payload'])
-        self.assertIn(async_responded[0]['flags'], [ScatterGatherTerminal.Flags.DEAF, ScatterGatherTerminal.Flags.DEAF | ScatterGatherTerminal.Flags.FINISHED])
-        self.assertIn(async_responded[1]['flags'], [ScatterGatherTerminal.Flags.DEAF, ScatterGatherTerminal.Flags.DEAF | ScatterGatherTerminal.Flags.FINISHED])
-        self.assertNotEquals(async_responded[0]['flags'], async_responded[1]['flags'])
+        self.assertEquals(2, len(async_gathered))
+        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
+        self.assertEquals(operation_id, async_gathered[1]['operation_id'])
+        self.assertFalse(async_gathered[0]['err'])
+        self.assertFalse(async_gathered[1]['err'])
+        self.assertEquals(bytearray(), async_gathered[0]['payload'])
+        self.assertEquals(bytearray(), async_gathered[1]['payload'])
+        self.assertIn(async_gathered[0]['flags'], [ScatterGatherTerminal.Flags.DEAF, ScatterGatherTerminal.Flags.DEAF | ScatterGatherTerminal.Flags.FINISHED])
+        self.assertIn(async_gathered[1]['flags'], [ScatterGatherTerminal.Flags.DEAF, ScatterGatherTerminal.Flags.DEAF | ScatterGatherTerminal.Flags.FINISHED])
+        self.assertNotEquals(async_gathered[0]['flags'], async_gathered[1]['flags'])
 
         # check that returning STOP from the completion handler stops notifications about received requests
-        operation_id = request(True)
-        self.assertEquals(1, len(async_responded))
+        operation_id = scatterGather(True)
+        self.assertEquals(1, len(async_gathered))
 
         # check synchronous methods
         def ignoreHandler(err, payload):
@@ -338,88 +338,88 @@ class ObjectOrientedApiTest(unittest.TestCase):
             self.assertEquals(bytearray([3, 4]), payload)
             return payload
 
-        terminal_a.request_handler = ignoreHandler
-        terminal_b.request_handler = ignoreHandler
+        terminal_a.scattered_message_handler = ignoreHandler
+        terminal_b.scattered_message_handler = ignoreHandler
 
         with self.assertRaises(ScatterGatherTerminal.Ignored):
-            terminal_c.request(bytearray([3, 4]), False)
+            terminal_c.scatterGather(bytearray([3, 4]), False)
 
         with self.assertRaises(ScatterGatherTerminal.Ignored):
-            terminal_c.request(bytearray([3, 4]), True)
+            terminal_c.scatterGather(bytearray([3, 4]), True)
 
-        terminal_a.request_handler = ignoreHandler
-        terminal_b.request_handler = respondHandler
+        terminal_a.scattered_message_handler = ignoreHandler
+        terminal_b.scattered_message_handler = respondHandler
 
-        response = terminal_c.request(bytearray([3, 4]), False)
+        response = terminal_c.scatterGather(bytearray([3, 4]), False)
         self.assertEquals(bytearray([3, 4]), response)
 
-        terminal_a.request_handler = respondHandler
-        terminal_b.request_handler = ignoreHandler
+        terminal_a.scattered_message_handler = respondHandler
+        terminal_b.scattered_message_handler = ignoreHandler
 
-        response = terminal_c.request(bytearray([3, 4]), False)
+        response = terminal_c.scatterGather(bytearray([3, 4]), False)
         self.assertEquals(bytearray([3, 4]), response)
 
-        terminal_a.request_handler = None
-        terminal_b.request_handler = None
+        terminal_a.scattered_message_handler = None
+        terminal_b.scattered_message_handler = None
 
         # remove a binding so we only receive one response from now on
         binding_b.destroy()
         time.sleep(0.02)
 
         # respond to a request
-        receiveRequest()
-        operation_id = request()
+        receiveScatteredMessage()
+        operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_requested))
-        self.assertFalse(async_requested[0]['err'])
-        self.assertEquals(bytearray([1, 0, 2]), async_requested[0]['payload'])
-        self.assertTrue(async_requested[0]['operation_id'])
+        self.assertEquals(1, len(async_scattered))
+        self.assertFalse(async_scattered[0]['err'])
+        self.assertEquals(bytearray([1, 0, 2]), async_scattered[0]['payload'])
+        self.assertTrue(async_scattered[0]['operation_id'])
 
-        terminal_a.respondToRequest(async_requested[0]['operation_id'], bytearray([2, 0, 3]))
+        terminal_a.respondToScatteredMessage(async_scattered[0]['operation_id'], bytearray([2, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(bytearray([2, 0, 3]), async_responded[0]['payload'])
-        self.assertEquals(async_responded[0]['flags'], api.ScatterGatherFlags.FINISHED)
+        self.assertEquals(1, len(async_gathered))
+        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
+        self.assertFalse(async_gathered[0]['err'])
+        self.assertEquals(bytearray([2, 0, 3]), async_gathered[0]['payload'])
+        self.assertEquals(async_gathered[0]['flags'], api.ScatterGatherFlags.FINISHED)
 
         # ignore a request
-        receiveRequest()
-        operation_id = request()
+        receiveScatteredMessage()
+        operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEquals(1, len(async_scattered))
 
-        terminal_a.ignoreRequest(async_requested[0]['operation_id'])
+        terminal_a.ignoreScatteredMessage(async_scattered[0]['operation_id'])
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
-        self.assertEquals(async_responded[0]['flags'], api.ScatterGatherFlags.IGNORED | api.ScatterGatherFlags.FINISHED)
+        self.assertEquals(1, len(async_gathered))
+        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
+        self.assertFalse(async_gathered[0]['err'])
+        self.assertEquals(bytearray(), async_gathered[0]['payload'])
+        self.assertEquals(async_gathered[0]['flags'], ScatterGatherTerminal.Flags.IGNORED | ScatterGatherTerminal.Flags.FINISHED)
 
         # cancel request operation
-        receiveRequest()
-        operation_id = request()
-        terminal_c.cancelRequest(operation_id)
+        receiveScatteredMessage()
+        operation_id = scatterGather()
+        terminal_c.cancelScatterGather(operation_id)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertTrue(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
-        self.assertTrue(async_responded[0]['operation_id'])
-        self.assertEquals(async_responded[0]['flags'], api.ScatterGatherFlags.NO_FLAGS)
+        self.assertEquals(1, len(async_gathered))
+        self.assertTrue(async_gathered[0]['err'])
+        self.assertEquals(bytearray(), async_gathered[0]['payload'])
+        self.assertTrue(async_gathered[0]['operation_id'])
+        self.assertEquals(async_gathered[0]['flags'], ScatterGatherTerminal.Flags.NO_FLAGS)
 
         # cancel receive response operation
-        receiveRequest()
-        terminal_a.cancelReceiveRequest()
+        receiveScatteredMessage()
+        terminal_a.cancelReceiveScatteredMessage()
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_requested))
-        self.assertTrue(async_requested[0]['err'])
-        self.assertEquals(bytearray(), async_requested[0]['payload'])
-        self.assertFalse(async_requested[0]['operation_id'])
+        self.assertEquals(1, len(async_scattered))
+        self.assertTrue(async_scattered[0]['err'])
+        self.assertEquals(bytearray(), async_scattered[0]['payload'])
+        self.assertFalse(async_scattered[0]['operation_id'])
 
     def testScatterGatherProtoTerminals(self):
         scheduler = Scheduler()
@@ -437,60 +437,60 @@ class ObjectOrientedApiTest(unittest.TestCase):
         binding_b = Binding(terminal_b, 'Teacher')
         time.sleep(0.02)
 
-        async_requested = []
+        async_scattered_messages = []
 
-        def receiveRequestCompletionHandler(err, operation_id, msg):
-            async_requested.append({
+        def receiveScatteredMessageCompletionHandler(err, operation_id, msg):
+            async_scattered_messages.append({
                 'err': err,
                 'operation_id': operation_id,
                 'message': msg
             })
 
-        async_responded = []
+        async_gathered_message = []
 
-        def makeRequestCompletionHandler(stop):
-            def requestCompletionHandler(err, operation_id, flags, msg):
-                async_responded.append({
+        def makeScatterGatherCompletionHandler(stop):
+            def scatterGatherCompletionHandler(err, operation_id, flags, msg):
+                async_gathered_message.append({
                     'err': err,
                     'operation_id': operation_id,
                     'flags': flags,
                     'message': msg
                 })
-                return ClientProtoTerminal.ControlFlow.STOP if stop else ClientProtoTerminal.ControlFlow.CONTINUE
+                return ScatterGatherProtoTerminal.ControlFlow.STOP if stop else ScatterGatherProtoTerminal.ControlFlow.CONTINUE
 
-            return requestCompletionHandler
+            return scatterGatherCompletionHandler
 
-        def request(stopAfterFirstGatherMessage=False):
-            while len(async_responded) > 0:
-                async_responded.pop()
+        def scatterGather(stopAfterFirstGatherMessage=False):
+            while len(async_gathered_message) > 0:
+                async_gathered_message.pop()
             msg = terminal_c.makeRequestMessage()
             msg.value = 123.456
-            operation_id = terminal_c.asyncRequest(msg, makeRequestCompletionHandler(stopAfterFirstGatherMessage))
+            operation_id = terminal_c.asyncScatterGather(msg, makeScatterGatherCompletionHandler(stopAfterFirstGatherMessage))
             time.sleep(0.02)
             return operation_id
 
-        def receiveRequest():
-            while len(async_requested) > 0:
-                async_requested.pop()
-            terminal_a.asyncReceiveRequest(receiveRequestCompletionHandler)
+        def receiveScatteredMessage():
+            while len(async_scattered_messages) > 0:
+                async_scattered_messages.pop()
+            terminal_a.asyncReceiveScatteredMessage(receiveScatteredMessageCompletionHandler)
 
         # check that the completion handler can be called more than once for a single operation
-        operation_id = request()
+        operation_id = scatterGather()
 
-        self.assertEquals(2, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertEquals(operation_id, async_responded[1]['operation_id'])
-        self.assertFalse(async_responded[0]['err'])
-        self.assertFalse(async_responded[1]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['message'])
-        self.assertEquals(bytearray(), async_responded[1]['message'])
-        self.assertIn(async_responded[0]['flags'], [ClientProtoTerminal.Flags.DEAF, ClientProtoTerminal.Flags.DEAF | ClientProtoTerminal.Flags.FINISHED])
-        self.assertIn(async_responded[1]['flags'], [ClientProtoTerminal.Flags.DEAF, ClientProtoTerminal.Flags.DEAF | ClientProtoTerminal.Flags.FINISHED])
-        self.assertNotEquals(async_responded[0]['flags'], async_responded[1]['flags'])
+        self.assertEquals(2, len(async_gathered_message))
+        self.assertEquals(operation_id, async_gathered_message[0]['operation_id'])
+        self.assertEquals(operation_id, async_gathered_message[1]['operation_id'])
+        self.assertFalse(async_gathered_message[0]['err'])
+        self.assertFalse(async_gathered_message[1]['err'])
+        self.assertEquals(bytearray(), async_gathered_message[0]['message'])
+        self.assertEquals(bytearray(), async_gathered_message[1]['message'])
+        self.assertIn(async_gathered_message[0]['flags'], [ScatterGatherProtoTerminal.Flags.DEAF, ScatterGatherProtoTerminal.Flags.DEAF | ScatterGatherProtoTerminal.Flags.FINISHED])
+        self.assertIn(async_gathered_message[1]['flags'], [ScatterGatherProtoTerminal.Flags.DEAF, ScatterGatherProtoTerminal.Flags.DEAF | ScatterGatherProtoTerminal.Flags.FINISHED])
+        self.assertNotEquals(async_gathered_message[0]['flags'], async_gathered_message[1]['flags'])
 
         # check that returning STOP from the completion handler stops notifications about received requests
-        operation_id = request(True)
-        self.assertEquals(1, len(async_responded))
+        operation_id = scatterGather(True)
+        self.assertEquals(1, len(async_gathered_message))
 
         # check synchronous methods
         def ignoreHandler(err, msg):
@@ -508,93 +508,93 @@ class ObjectOrientedApiTest(unittest.TestCase):
             self.assertEquals(500, msg.value)
             return msg
 
-        terminal_a.request_handler = ignoreHandler
-        terminal_b.request_handler = ignoreHandler
+        terminal_a.scattered_message_handler = ignoreHandler
+        terminal_b.scattered_message_handler = ignoreHandler
 
         msg = terminal_c.makeRequestMessage()
         msg.value = 500
 
-        with self.assertRaises(ScatterGatherTerminal.Ignored):
-            terminal_c.request(msg, False)
+        with self.assertRaises(ScatterGatherProtoTerminal.Ignored):
+            terminal_c.scatterGather(msg, False)
 
-        with self.assertRaises(ScatterGatherTerminal.Ignored):
-            terminal_c.request(msg, True)
+        with self.assertRaises(ScatterGatherProtoTerminal.Ignored):
+            terminal_c.scatterGather(msg, True)
 
-        terminal_a.request_handler = ignoreHandler
-        terminal_b.request_handler = respondHandler
+        terminal_a.scattered_message_handler = ignoreHandler
+        terminal_b.scattered_message_handler = respondHandler
 
-        response = terminal_c.request(msg, False)
+        response = terminal_c.scatterGather(msg, False)
         self.assertEquals(500, response.value)
 
-        terminal_a.request_handler = respondHandler
-        terminal_b.request_handler = ignoreHandler
+        terminal_a.scattered_message_handler = respondHandler
+        terminal_b.scattered_message_handler = ignoreHandler
 
-        response = terminal_c.request(msg, False)
+        response = terminal_c.scatterGather(msg, False)
         self.assertEquals(500, response.value)
 
-        terminal_a.request_handler = None
-        terminal_b.request_handler = None
+        terminal_a.scattered_message_handler = None
+        terminal_b.scattered_message_handler = None
 
         # remove a binding so we only receive one response from now on
         binding_b.destroy()
         time.sleep(0.02)
 
         # respond to a request
-        receiveRequest()
-        operation_id = request()
+        receiveScatteredMessage()
+        operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_requested))
-        self.assertFalse(async_requested[0]['err'])
-        self.assertEquals(123.456, async_requested[0]['message'].value)
-        self.assertTrue(async_requested[0]['operation_id'])
+        self.assertEquals(1, len(async_scattered_messages))
+        self.assertFalse(async_scattered_messages[0]['err'])
+        self.assertEquals(123.456, async_scattered_messages[0]['message'].value)
+        self.assertTrue(async_scattered_messages[0]['operation_id'])
 
         msg = terminal_a.makeResponseMessage()
         msg.value = 555
-        terminal_a.respondToRequest(async_requested[0]['operation_id'], msg)
+        terminal_a.respondToScatteredMessage(async_scattered_messages[0]['operation_id'], msg)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(555, async_responded[0]['message'].value)
-        self.assertEquals(async_responded[0]['flags'], ClientProtoTerminal.Flags.FINISHED)
+        self.assertEquals(1, len(async_gathered_message))
+        self.assertEquals(operation_id, async_gathered_message[0]['operation_id'])
+        self.assertFalse(async_gathered_message[0]['err'])
+        self.assertEquals(555, async_gathered_message[0]['message'].value)
+        self.assertEquals(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.FINISHED)
 
         # ignore a request
-        receiveRequest()
-        operation_id = request()
+        receiveScatteredMessage()
+        operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEquals(1, len(async_scattered_messages))
 
-        terminal_a.ignoreRequest(async_requested[0]['operation_id'])
+        terminal_a.ignoreScatteredMessage(async_scattered_messages[0]['operation_id'])
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['message'])
-        self.assertEquals(async_responded[0]['flags'], ClientProtoTerminal.Flags.IGNORED | ClientProtoTerminal.Flags.FINISHED)
+        self.assertEquals(1, len(async_gathered_message))
+        self.assertEquals(operation_id, async_gathered_message[0]['operation_id'])
+        self.assertFalse(async_gathered_message[0]['err'])
+        self.assertEquals(bytearray(), async_gathered_message[0]['message'])
+        self.assertEquals(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.IGNORED | ScatterGatherProtoTerminal.Flags.FINISHED)
 
         # cancel request operation
-        receiveRequest()
-        operation_id = request()
-        terminal_c.cancelRequest(operation_id)
+        receiveScatteredMessage()
+        operation_id = scatterGather()
+        terminal_c.cancelScatterGather(operation_id)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertTrue(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['message'])
-        self.assertTrue(async_responded[0]['operation_id'])
-        self.assertEquals(async_responded[0]['flags'], ClientProtoTerminal.Flags.NO_FLAGS)
+        self.assertEquals(1, len(async_gathered_message))
+        self.assertTrue(async_gathered_message[0]['err'])
+        self.assertEquals(bytearray(), async_gathered_message[0]['message'])
+        self.assertTrue(async_gathered_message[0]['operation_id'])
+        self.assertEquals(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.NO_FLAGS)
 
         # cancel receive response operation
-        receiveRequest()
-        terminal_a.cancelReceiveRequest()
+        receiveScatteredMessage()
+        terminal_a.cancelReceiveScatteredMessage()
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_requested))
-        self.assertTrue(async_requested[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['message'])
-        self.assertFalse(async_requested[0]['operation_id'])
+        self.assertEquals(1, len(async_scattered_messages))
+        self.assertTrue(async_scattered_messages[0]['err'])
+        self.assertEquals(bytearray(), async_gathered_message[0]['message'])
+        self.assertFalse(async_scattered_messages[0]['operation_id'])
 
     def testCachedPublishSubscribeTerminals(self):
         scheduler = Scheduler()
