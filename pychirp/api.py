@@ -1,5 +1,6 @@
 from ctypes import *
 from struct import *
+import platform
 
 GET_KNOWN_TERMINALS_BUFFER_SIZE          = 1024**2
 AWAIT_KNOWN_TERMINALS_CHANGE_BUFFER_SIZE = 256
@@ -245,7 +246,12 @@ def _custom_call(shared_lib_fn, argtypes):
     return decorator
 
 
-_chirp = cdll.LoadLibrary("libchirp.so")
+if platform.system() == 'Windows':
+    _chirp = cdll.LoadLibrary("chirp.dll")
+elif platform.system() == 'Linux':
+    _chirp = cdll.LoadLibrary("libchirp.so")
+else:
+    raise Exception(platform.system() + ' is not supported yet')
 
 
 class _CallbackFunction(object):
