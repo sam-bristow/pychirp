@@ -148,7 +148,7 @@ class SimpleTcpServer(object):
                 self._cv.notifyAll()
 
         except Exception as e:
-            self._log('Failed to assign connection to the endpoint: {}', e)
+            self._log('Failed to assign connection to the endpoint: {}'.format(e))
             connection.tryDestroy()
 
         self._startAccept()
@@ -236,12 +236,9 @@ class SimpleTcpClient(object):
 
     def __del__(self):
         try:
-            self._client.cancelConnect()
+            self.destroy()
         except:
             pass
-
-        if self._active_connection:
-            self._active_connection.tryDestroy()
 
     def _startConnect(self):
         try:
@@ -277,7 +274,7 @@ class SimpleTcpClient(object):
                 self._cv.notifyAll()
 
         except Exception as e:
-            self._log('Failed to assign connection to the endpoint: {}', e)
+            self._log('Failed to assign connection to the endpoint: {}'.format(e))
             connection.tryDestroy()
             self._startConnectDelayed()
 
@@ -349,3 +346,14 @@ class SimpleTcpClient(object):
         with self._cv:
             while self._active_connection is not None:
                 self._cv.wait()
+
+    def destroy(self):
+        try:
+            self._client.cancelConnect()
+        except:
+            pass
+        if self._active_connection:
+            self._active_connection.cancelAwaitDeath()
+
+        self.waitUntilDisconnected()
+        self._client.destroy()
