@@ -166,9 +166,9 @@ class ObjectOrientedApiTest(unittest.TestCase):
         producer.publishMessage(send_msg)
 
         recv_msg.append((consumer.waitForMessage(1.0), None))
-        self.assertEquals(123.456, recv_msg[0][0].value)
-        self.assertEquals(recv_msg[0], recv_msg[1])
-        self.assertEquals(recv_msg[0], (consumer.last_received_message, None))
+        self.assertEqual(123.456, recv_msg[0][0].value)
+        self.assertEqual(recv_msg[0], recv_msg[1])
+        self.assertEqual(recv_msg[0], (consumer.last_received_message, None))
 
         consumer = CachedConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_49164)
         producer = CachedProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
@@ -184,16 +184,16 @@ class ObjectOrientedApiTest(unittest.TestCase):
         producer.publishMessage(send_msg)
 
         recv_msg.append(consumer.waitForMessage(1.0))
-        self.assertEquals(123.456, recv_msg[0][0].value)
-        self.assertEquals(recv_msg[0], recv_msg[1])
-        self.assertEquals(recv_msg[0], consumer.last_received_message)
+        self.assertEqual(123.456, recv_msg[0][0].value)
+        self.assertEqual(recv_msg[0], recv_msg[1])
+        self.assertEqual(recv_msg[0], consumer.last_received_message)
 
     def testProtoTerminalMixin(self):
         scheduler = Scheduler()
         leaf = Leaf(scheduler)
         terminal = DeafMuteProtoTerminal(leaf, 'Voltage', proto.chirp_49164)
 
-        self.assertEquals(terminal.proto_module, proto.chirp_49164)
+        self.assertEqual(terminal.proto_module, proto.chirp_49164)
 
     def testDeafMuteTerminals(self):
         scheduler = Scheduler()
@@ -217,7 +217,7 @@ class ObjectOrientedApiTest(unittest.TestCase):
         binding_b = Binding(terminal_b, 'Voltage')
         time.sleep(0.02)
 
-        self.assertEquals(terminal_a.signature, 49164)
+        self.assertEqual(terminal_a.signature, 49164)
         self.assertTrue(binding_b.is_established)
 
     def testPublishSubscribeTerminals(self):
@@ -233,7 +233,7 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(bytearray([1, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals(bytearray([1, 0, 3]), terminal_b.last_received_message)
+        self.assertEqual(bytearray([1, 0, 3]), terminal_b.last_received_message)
 
     def testPublishSubscribeProtoTerminals(self):
         scheduler = Scheduler()
@@ -250,7 +250,7 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(msg)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message.value)
+        self.assertEqual(123.456, terminal_b.last_received_message.value)
 
     def testScatterGatherTerminals(self):
         scheduler = Scheduler()
@@ -307,20 +307,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         # check that the completion handler can be called more than once for a single operation
         operation_id = scatterGather()
 
-        self.assertEquals(2, len(async_gathered))
-        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
-        self.assertEquals(operation_id, async_gathered[1]['operation_id'])
+        self.assertEqual(2, len(async_gathered))
+        self.assertEqual(operation_id, async_gathered[0]['operation_id'])
+        self.assertEqual(operation_id, async_gathered[1]['operation_id'])
         self.assertFalse(async_gathered[0]['err'])
         self.assertFalse(async_gathered[1]['err'])
-        self.assertEquals(bytearray(), async_gathered[0]['payload'])
-        self.assertEquals(bytearray(), async_gathered[1]['payload'])
+        self.assertEqual(bytearray(), async_gathered[0]['payload'])
+        self.assertEqual(bytearray(), async_gathered[1]['payload'])
         self.assertIn(async_gathered[0]['flags'], [ScatterGatherTerminal.Flags.DEAF, ScatterGatherTerminal.Flags.DEAF | ScatterGatherTerminal.Flags.FINISHED])
         self.assertIn(async_gathered[1]['flags'], [ScatterGatherTerminal.Flags.DEAF, ScatterGatherTerminal.Flags.DEAF | ScatterGatherTerminal.Flags.FINISHED])
-        self.assertNotEquals(async_gathered[0]['flags'], async_gathered[1]['flags'])
+        self.assertNotEqual(async_gathered[0]['flags'], async_gathered[1]['flags'])
 
         # check that returning STOP from the completion handler stops notifications about received requests
         operation_id = scatterGather(True)
-        self.assertEquals(1, len(async_gathered))
+        self.assertEqual(1, len(async_gathered))
 
         # check synchronous methods
         def ignoreHandler(err, payload):
@@ -328,14 +328,14 @@ class ObjectOrientedApiTest(unittest.TestCase):
                 return None
 
             self.assertTrue(not err)
-            self.assertEquals(bytearray([3, 4]), payload)
+            self.assertEqual(bytearray([3, 4]), payload)
 
         def respondHandler(err, payload):
             if err.error_code == api.ErrorCodes.CANCELED:
                 return None
 
             self.assertTrue(not err or err.error_code == api.ErrorCodes.CANCELED)
-            self.assertEquals(bytearray([3, 4]), payload)
+            self.assertEqual(bytearray([3, 4]), payload)
             return payload
 
         terminal_a.scattered_message_handler = ignoreHandler
@@ -351,13 +351,13 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_b.scattered_message_handler = respondHandler
 
         response = terminal_c.scatterGather(bytearray([3, 4]), False)
-        self.assertEquals(bytearray([3, 4]), response)
+        self.assertEqual(bytearray([3, 4]), response)
 
         terminal_a.scattered_message_handler = respondHandler
         terminal_b.scattered_message_handler = ignoreHandler
 
         response = terminal_c.scatterGather(bytearray([3, 4]), False)
-        self.assertEquals(bytearray([3, 4]), response)
+        self.assertEqual(bytearray([3, 4]), response)
 
         terminal_a.scattered_message_handler = None
         terminal_b.scattered_message_handler = None
@@ -370,34 +370,34 @@ class ObjectOrientedApiTest(unittest.TestCase):
         receiveScatteredMessage()
         operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_scattered))
+        self.assertEqual(1, len(async_scattered))
         self.assertFalse(async_scattered[0]['err'])
-        self.assertEquals(bytearray([1, 0, 2]), async_scattered[0]['payload'])
+        self.assertEqual(bytearray([1, 0, 2]), async_scattered[0]['payload'])
         self.assertTrue(async_scattered[0]['operation_id'])
 
         terminal_a.respondToScatteredMessage(async_scattered[0]['operation_id'], bytearray([2, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_gathered))
-        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
+        self.assertEqual(1, len(async_gathered))
+        self.assertEqual(operation_id, async_gathered[0]['operation_id'])
         self.assertFalse(async_gathered[0]['err'])
-        self.assertEquals(bytearray([2, 0, 3]), async_gathered[0]['payload'])
-        self.assertEquals(async_gathered[0]['flags'], api.ScatterGatherFlags.FINISHED)
+        self.assertEqual(bytearray([2, 0, 3]), async_gathered[0]['payload'])
+        self.assertEqual(async_gathered[0]['flags'], api.ScatterGatherFlags.FINISHED)
 
         # ignore a request
         receiveScatteredMessage()
         operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_scattered))
+        self.assertEqual(1, len(async_scattered))
 
         terminal_a.ignoreScatteredMessage(async_scattered[0]['operation_id'])
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_gathered))
-        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
+        self.assertEqual(1, len(async_gathered))
+        self.assertEqual(operation_id, async_gathered[0]['operation_id'])
         self.assertFalse(async_gathered[0]['err'])
-        self.assertEquals(bytearray(), async_gathered[0]['payload'])
-        self.assertEquals(async_gathered[0]['flags'], ScatterGatherTerminal.Flags.IGNORED | ScatterGatherTerminal.Flags.FINISHED)
+        self.assertEqual(bytearray(), async_gathered[0]['payload'])
+        self.assertEqual(async_gathered[0]['flags'], ScatterGatherTerminal.Flags.IGNORED | ScatterGatherTerminal.Flags.FINISHED)
 
         # cancel request operation
         receiveScatteredMessage()
@@ -405,20 +405,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_c.cancelScatterGather(operation_id)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_gathered))
+        self.assertEqual(1, len(async_gathered))
         self.assertTrue(async_gathered[0]['err'])
-        self.assertEquals(bytearray(), async_gathered[0]['payload'])
+        self.assertEqual(bytearray(), async_gathered[0]['payload'])
         self.assertTrue(async_gathered[0]['operation_id'])
-        self.assertEquals(async_gathered[0]['flags'], ScatterGatherTerminal.Flags.NO_FLAGS)
+        self.assertEqual(async_gathered[0]['flags'], ScatterGatherTerminal.Flags.NO_FLAGS)
 
         # cancel receive response operation
         receiveScatteredMessage()
         terminal_a.cancelReceiveScatteredMessage()
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_scattered))
+        self.assertEqual(1, len(async_scattered))
         self.assertTrue(async_scattered[0]['err'])
-        self.assertEquals(bytearray(), async_scattered[0]['payload'])
+        self.assertEqual(bytearray(), async_scattered[0]['payload'])
         self.assertFalse(async_scattered[0]['operation_id'])
 
     def testScatterGatherProtoTerminals(self):
@@ -477,20 +477,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         # check that the completion handler can be called more than once for a single operation
         operation_id = scatterGather()
 
-        self.assertEquals(2, len(async_gathered_message))
-        self.assertEquals(operation_id, async_gathered_message[0]['operation_id'])
-        self.assertEquals(operation_id, async_gathered_message[1]['operation_id'])
+        self.assertEqual(2, len(async_gathered_message))
+        self.assertEqual(operation_id, async_gathered_message[0]['operation_id'])
+        self.assertEqual(operation_id, async_gathered_message[1]['operation_id'])
         self.assertFalse(async_gathered_message[0]['err'])
         self.assertFalse(async_gathered_message[1]['err'])
-        self.assertEquals(bytearray(), async_gathered_message[0]['message'])
-        self.assertEquals(bytearray(), async_gathered_message[1]['message'])
+        self.assertEqual(bytearray(), async_gathered_message[0]['message'])
+        self.assertEqual(bytearray(), async_gathered_message[1]['message'])
         self.assertIn(async_gathered_message[0]['flags'], [ScatterGatherProtoTerminal.Flags.DEAF, ScatterGatherProtoTerminal.Flags.DEAF | ScatterGatherProtoTerminal.Flags.FINISHED])
         self.assertIn(async_gathered_message[1]['flags'], [ScatterGatherProtoTerminal.Flags.DEAF, ScatterGatherProtoTerminal.Flags.DEAF | ScatterGatherProtoTerminal.Flags.FINISHED])
-        self.assertNotEquals(async_gathered_message[0]['flags'], async_gathered_message[1]['flags'])
+        self.assertNotEqual(async_gathered_message[0]['flags'], async_gathered_message[1]['flags'])
 
         # check that returning STOP from the completion handler stops notifications about received requests
         operation_id = scatterGather(True)
-        self.assertEquals(1, len(async_gathered_message))
+        self.assertEqual(1, len(async_gathered_message))
 
         # check synchronous methods
         def ignoreHandler(err, msg):
@@ -498,14 +498,14 @@ class ObjectOrientedApiTest(unittest.TestCase):
                 return None
 
             self.assertTrue(not err)
-            self.assertEquals(500, msg.value)
+            self.assertEqual(500, msg.value)
 
         def respondHandler(err, msg):
             if err.error_code == api.ErrorCodes.CANCELED:
                 return None
 
             self.assertTrue(not err or err.error_code == api.ErrorCodes.CANCELED)
-            self.assertEquals(500, msg.value)
+            self.assertEqual(500, msg.value)
             return msg
 
         terminal_a.scattered_message_handler = ignoreHandler
@@ -524,13 +524,13 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_b.scattered_message_handler = respondHandler
 
         response = terminal_c.scatterGather(msg, False)
-        self.assertEquals(500, response.value)
+        self.assertEqual(500, response.value)
 
         terminal_a.scattered_message_handler = respondHandler
         terminal_b.scattered_message_handler = ignoreHandler
 
         response = terminal_c.scatterGather(msg, False)
-        self.assertEquals(500, response.value)
+        self.assertEqual(500, response.value)
 
         terminal_a.scattered_message_handler = None
         terminal_b.scattered_message_handler = None
@@ -543,9 +543,9 @@ class ObjectOrientedApiTest(unittest.TestCase):
         receiveScatteredMessage()
         operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_scattered_messages))
+        self.assertEqual(1, len(async_scattered_messages))
         self.assertFalse(async_scattered_messages[0]['err'])
-        self.assertEquals(123.456, async_scattered_messages[0]['message'].value)
+        self.assertEqual(123.456, async_scattered_messages[0]['message'].value)
         self.assertTrue(async_scattered_messages[0]['operation_id'])
 
         msg = terminal_a.makeResponseMessage()
@@ -553,26 +553,26 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.respondToScatteredMessage(async_scattered_messages[0]['operation_id'], msg)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_gathered_message))
-        self.assertEquals(operation_id, async_gathered_message[0]['operation_id'])
+        self.assertEqual(1, len(async_gathered_message))
+        self.assertEqual(operation_id, async_gathered_message[0]['operation_id'])
         self.assertFalse(async_gathered_message[0]['err'])
-        self.assertEquals(555, async_gathered_message[0]['message'].value)
-        self.assertEquals(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.FINISHED)
+        self.assertEqual(555, async_gathered_message[0]['message'].value)
+        self.assertEqual(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.FINISHED)
 
         # ignore a request
         receiveScatteredMessage()
         operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_scattered_messages))
+        self.assertEqual(1, len(async_scattered_messages))
 
         terminal_a.ignoreScatteredMessage(async_scattered_messages[0]['operation_id'])
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_gathered_message))
-        self.assertEquals(operation_id, async_gathered_message[0]['operation_id'])
+        self.assertEqual(1, len(async_gathered_message))
+        self.assertEqual(operation_id, async_gathered_message[0]['operation_id'])
         self.assertFalse(async_gathered_message[0]['err'])
-        self.assertEquals(bytearray(), async_gathered_message[0]['message'])
-        self.assertEquals(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.IGNORED | ScatterGatherProtoTerminal.Flags.FINISHED)
+        self.assertEqual(bytearray(), async_gathered_message[0]['message'])
+        self.assertEqual(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.IGNORED | ScatterGatherProtoTerminal.Flags.FINISHED)
 
         # cancel request operation
         receiveScatteredMessage()
@@ -580,20 +580,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_c.cancelScatterGather(operation_id)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_gathered_message))
+        self.assertEqual(1, len(async_gathered_message))
         self.assertTrue(async_gathered_message[0]['err'])
-        self.assertEquals(bytearray(), async_gathered_message[0]['message'])
+        self.assertEqual(bytearray(), async_gathered_message[0]['message'])
         self.assertTrue(async_gathered_message[0]['operation_id'])
-        self.assertEquals(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.NO_FLAGS)
+        self.assertEqual(async_gathered_message[0]['flags'], ScatterGatherProtoTerminal.Flags.NO_FLAGS)
 
         # cancel receive response operation
         receiveScatteredMessage()
         terminal_a.cancelReceiveScatteredMessage()
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_scattered_messages))
+        self.assertEqual(1, len(async_scattered_messages))
         self.assertTrue(async_scattered_messages[0]['err'])
-        self.assertEquals(bytearray(), async_gathered_message[0]['message'])
+        self.assertEqual(bytearray(), async_gathered_message[0]['message'])
         self.assertFalse(async_scattered_messages[0]['operation_id'])
 
     def testCachedPublishSubscribeTerminals(self):
@@ -610,18 +610,18 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(bytearray([1, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals((bytearray([1, 0, 3]), False), terminal_b.last_received_message)
+        self.assertEqual((bytearray([1, 0, 3]), False), terminal_b.last_received_message)
 
         # get cached message
         payload = terminal_b.getCachedMessage()
-        self.assertEquals(bytearray([1, 0, 3]), payload)
+        self.assertEqual(bytearray([1, 0, 3]), payload)
 
         # receive a cached message
         connection.destroy()
         connection = LocalConnection(leaf_a, leaf_b)
         time.sleep(0.02)
 
-        self.assertEquals((bytearray([1, 0, 3]), True), terminal_b.last_received_message)
+        self.assertEqual((bytearray([1, 0, 3]), True), terminal_b.last_received_message)
 
     def testCachedPublishSubscribeProtoTerminals(self):
         scheduler = Scheduler()
@@ -639,18 +639,18 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(msg)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message[0].value)
+        self.assertEqual(123.456, terminal_b.last_received_message[0].value)
         self.assertFalse(terminal_b.last_received_message[1])
 
         # get cached message
-        self.assertEquals(terminal_b.getCachedMessage().value, 123.456)
+        self.assertEqual(terminal_b.getCachedMessage().value, 123.456)
 
         # receive a cached message
         connection.destroy()
         connection = LocalConnection(leaf_a, leaf_b)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message[0].value)
+        self.assertEqual(123.456, terminal_b.last_received_message[0].value)
         self.assertTrue(terminal_b.last_received_message[1])
 
     def testProducerConsumerTerminals(self):
@@ -665,7 +665,7 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(bytearray([1, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals(bytearray([1, 0, 3]), terminal_b.last_received_message)
+        self.assertEqual(bytearray([1, 0, 3]), terminal_b.last_received_message)
 
     def testProducerConsumerProtoTerminals(self):
         scheduler = Scheduler()
@@ -681,7 +681,7 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(msg)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message.value)
+        self.assertEqual(123.456, terminal_b.last_received_message.value)
 
     def testCachedProducerConsumerTerminals(self):
         scheduler = Scheduler()
@@ -696,18 +696,18 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(bytearray([1, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals((bytearray([1, 0, 3]), False), terminal_b.last_received_message)
+        self.assertEqual((bytearray([1, 0, 3]), False), terminal_b.last_received_message)
 
         # get cached message
         payload = terminal_b.getCachedMessage()
-        self.assertEquals(bytearray([1, 0, 3]), payload)
+        self.assertEqual(bytearray([1, 0, 3]), payload)
 
         # receive a cached message
         connection.destroy()
         connection = LocalConnection(leaf_a, leaf_b)
         time.sleep(0.02)
 
-        self.assertEquals((bytearray([1, 0, 3]), True), terminal_b.last_received_message)
+        self.assertEqual((bytearray([1, 0, 3]), True), terminal_b.last_received_message)
 
     def testCachedProducerConsumerProtoTerminals(self):
         scheduler = Scheduler()
@@ -724,18 +724,18 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(msg)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message[0].value)
+        self.assertEqual(123.456, terminal_b.last_received_message[0].value)
         self.assertFalse(terminal_b.last_received_message[1])
 
         # get cached message
-        self.assertEquals(terminal_b.getCachedMessage().value, 123.456)
+        self.assertEqual(terminal_b.getCachedMessage().value, 123.456)
 
         # receive a cached message
         connection.destroy()
         connection = LocalConnection(leaf_a, leaf_b)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message[0].value)
+        self.assertEqual(123.456, terminal_b.last_received_message[0].value)
         self.assertTrue(terminal_b.last_received_message[1])
 
     def testMasterSlaveTerminals(self):
@@ -750,14 +750,14 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(bytearray([1, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals(bytearray([1, 0, 3]), terminal_b.last_received_message)
+        self.assertEqual(bytearray([1, 0, 3]), terminal_b.last_received_message)
         self.assertIsNone(terminal_a.last_received_message)
 
         terminal_b.publishMessage(bytearray([5, 5]))
         time.sleep(0.02)
 
-        self.assertEquals(bytearray([5, 5]), terminal_a.last_received_message)
-        self.assertEquals(bytearray([5, 5]), terminal_b.last_received_message)
+        self.assertEqual(bytearray([5, 5]), terminal_a.last_received_message)
+        self.assertEqual(bytearray([5, 5]), terminal_b.last_received_message)
 
     def testMasterSlaveProtoTerminals(self):
         scheduler = Scheduler()
@@ -773,15 +773,15 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(msg)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message.value)
+        self.assertEqual(123.456, terminal_b.last_received_message.value)
         self.assertIsNone(terminal_a.last_received_message)
 
         msg.value = 555
         terminal_b.publishMessage(msg)
         time.sleep(0.02)
 
-        self.assertEquals(555, terminal_a.last_received_message.value)
-        self.assertEquals(555, terminal_b.last_received_message.value)
+        self.assertEqual(555, terminal_a.last_received_message.value)
+        self.assertEqual(555, terminal_b.last_received_message.value)
 
     def testCachedMasterSlaveTerminals(self):
         scheduler = Scheduler()
@@ -796,38 +796,38 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(bytearray([1, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals((bytearray([1, 0, 3]), False), terminal_b.last_received_message)
+        self.assertEqual((bytearray([1, 0, 3]), False), terminal_b.last_received_message)
         self.assertIsNone(terminal_a.last_received_message)
 
         # get cached message
         payload = terminal_b.getCachedMessage()
-        self.assertEquals(bytearray([1, 0, 3]), payload)
+        self.assertEqual(bytearray([1, 0, 3]), payload)
 
         # receive a cached message
         connection.destroy()
         connection = LocalConnection(leaf_a, leaf_b)
         time.sleep(0.02)
 
-        self.assertEquals((bytearray([1, 0, 3]), True), terminal_b.last_received_message)
+        self.assertEqual((bytearray([1, 0, 3]), True), terminal_b.last_received_message)
 
         # publish a message on the Slave Terminal
         terminal_b.publishMessage(bytearray([5, 5]))
         time.sleep(0.02)
 
-        self.assertEquals((bytearray([5, 5]), False), terminal_a.last_received_message)
-        self.assertEquals((bytearray([5, 5]), False), terminal_b.last_received_message)
+        self.assertEqual((bytearray([5, 5]), False), terminal_a.last_received_message)
+        self.assertEqual((bytearray([5, 5]), False), terminal_b.last_received_message)
 
         # get cached message
         payload = terminal_a.getCachedMessage()
-        self.assertEquals(bytearray([5, 5]), payload)
+        self.assertEqual(bytearray([5, 5]), payload)
 
         # receive a cached message
         connection.destroy()
         connection = LocalConnection(leaf_a, leaf_b)
         time.sleep(0.02)
 
-        self.assertEquals((bytearray([5, 5]), True), terminal_a.last_received_message)
-        self.assertEquals((bytearray([5, 5]), True), terminal_b.last_received_message)
+        self.assertEqual((bytearray([5, 5]), True), terminal_a.last_received_message)
+        self.assertEqual((bytearray([5, 5]), True), terminal_b.last_received_message)
 
     def testCachedMasterSlaveProtoTerminals(self):
         scheduler = Scheduler()
@@ -844,20 +844,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.publishMessage(msg)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message[0].value)
+        self.assertEqual(123.456, terminal_b.last_received_message[0].value)
         self.assertFalse(terminal_b.last_received_message[1])
         self.assertIsNone(terminal_a.last_received_message)
 
         # get cached message
         payload = terminal_b.getCachedMessage()
-        self.assertEquals(123.456, terminal_b.getCachedMessage().value)
+        self.assertEqual(123.456, terminal_b.getCachedMessage().value)
 
         # receive a cached message
         connection.destroy()
         connection = LocalConnection(leaf_a, leaf_b)
         time.sleep(0.02)
 
-        self.assertEquals(123.456, terminal_b.last_received_message[0].value)
+        self.assertEqual(123.456, terminal_b.last_received_message[0].value)
         self.assertTrue(terminal_b.last_received_message[1])
 
         # publish a message on the Slave Terminal
@@ -865,23 +865,23 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_b.publishMessage(msg)
         time.sleep(0.02)
 
-        self.assertEquals(555, terminal_a.last_received_message[0].value)
+        self.assertEqual(555, terminal_a.last_received_message[0].value)
         self.assertFalse(terminal_a.last_received_message[1])
-        self.assertEquals(555, terminal_b.last_received_message[0].value)
+        self.assertEqual(555, terminal_b.last_received_message[0].value)
         self.assertFalse(terminal_b.last_received_message[1])
 
         # get cached message
-        self.assertEquals(555, terminal_a.getCachedMessage().value)
-        self.assertEquals(555, terminal_b.getCachedMessage().value)
+        self.assertEqual(555, terminal_a.getCachedMessage().value)
+        self.assertEqual(555, terminal_b.getCachedMessage().value)
 
         # receive a cached message
         connection.destroy()
         connection = LocalConnection(leaf_a, leaf_b)
         time.sleep(0.02)
 
-        self.assertEquals(555, terminal_a.last_received_message[0].value)
+        self.assertEqual(555, terminal_a.last_received_message[0].value)
         self.assertTrue(terminal_a.last_received_message[1])
-        self.assertEquals(555, terminal_b.last_received_message[0].value)
+        self.assertEqual(555, terminal_b.last_received_message[0].value)
         self.assertTrue(terminal_b.last_received_message[1])
 
     def testServiceClientTerminals(self):
@@ -937,20 +937,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         # check that the completion handler can be called more than once for a single operation
         operation_id = request()
 
-        self.assertEquals(2, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertEquals(operation_id, async_responded[1]['operation_id'])
+        self.assertEqual(2, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(operation_id, async_responded[1]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
         self.assertFalse(async_responded[1]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
-        self.assertEquals(bytearray(), async_responded[1]['payload'])
+        self.assertEqual(bytearray(), async_responded[0]['payload'])
+        self.assertEqual(bytearray(), async_responded[1]['payload'])
         self.assertIn(async_responded[0]['flags'], [ClientTerminal.Flags.DEAF, ClientTerminal.Flags.DEAF | ClientTerminal.Flags.FINISHED])
         self.assertIn(async_responded[1]['flags'], [ClientTerminal.Flags.DEAF, ClientTerminal.Flags.DEAF | ClientTerminal.Flags.FINISHED])
-        self.assertNotEquals(async_responded[0]['flags'], async_responded[1]['flags'])
+        self.assertNotEqual(async_responded[0]['flags'], async_responded[1]['flags'])
 
         # check that returning STOP from the completion handler stops notifications about received requests
         operation_id = request(True)
-        self.assertEquals(1, len(async_responded))
+        self.assertEqual(1, len(async_responded))
 
         # check synchronous methods
         def ignoreHandler(err, payload):
@@ -958,14 +958,14 @@ class ObjectOrientedApiTest(unittest.TestCase):
                 return None
 
             self.assertTrue(not err)
-            self.assertEquals(bytearray([3, 4]), payload)
+            self.assertEqual(bytearray([3, 4]), payload)
 
         def respondHandler(err, payload):
             if err.error_code == api.ErrorCodes.CANCELED:
                 return None
 
             self.assertTrue(not err or err.error_code == api.ErrorCodes.CANCELED)
-            self.assertEquals(bytearray([3, 4]), payload)
+            self.assertEqual(bytearray([3, 4]), payload)
             return payload
 
         terminal_a.request_handler = ignoreHandler
@@ -981,13 +981,13 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_b.request_handler = respondHandler
 
         response = terminal_c.request(bytearray([3, 4]), False)
-        self.assertEquals(bytearray([3, 4]), response)
+        self.assertEqual(bytearray([3, 4]), response)
 
         terminal_a.request_handler = respondHandler
         terminal_b.request_handler = ignoreHandler
 
         response = terminal_c.request(bytearray([3, 4]), False)
-        self.assertEquals(bytearray([3, 4]), response)
+        self.assertEqual(bytearray([3, 4]), response)
 
         terminal_a.request_handler = None
         terminal_b.request_handler = None
@@ -1000,34 +1000,34 @@ class ObjectOrientedApiTest(unittest.TestCase):
         receiveRequest()
         operation_id = request()
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
         self.assertFalse(async_requested[0]['err'])
-        self.assertEquals(bytearray([1, 0, 2]), async_requested[0]['payload'])
+        self.assertEqual(bytearray([1, 0, 2]), async_requested[0]['payload'])
         self.assertTrue(async_requested[0]['operation_id'])
 
         terminal_a.respondToRequest(async_requested[0]['operation_id'], bytearray([2, 0, 3]))
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(1, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(bytearray([2, 0, 3]), async_responded[0]['payload'])
-        self.assertEquals(async_responded[0]['flags'], ClientTerminal.Flags.FINISHED)
+        self.assertEqual(bytearray([2, 0, 3]), async_responded[0]['payload'])
+        self.assertEqual(async_responded[0]['flags'], ClientTerminal.Flags.FINISHED)
 
         # ignore a request
         receiveRequest()
         operation_id = request()
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
 
         terminal_a.ignoreRequest(async_requested[0]['operation_id'])
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(1, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
-        self.assertEquals(async_responded[0]['flags'], ClientTerminal.Flags.IGNORED | ClientTerminal.Flags.FINISHED)
+        self.assertEqual(bytearray(), async_responded[0]['payload'])
+        self.assertEqual(async_responded[0]['flags'], ClientTerminal.Flags.IGNORED | ClientTerminal.Flags.FINISHED)
 
         # cancel request operation
         receiveRequest()
@@ -1035,20 +1035,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_c.cancelRequest(operation_id)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
+        self.assertEqual(1, len(async_responded))
         self.assertTrue(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
+        self.assertEqual(bytearray(), async_responded[0]['payload'])
         self.assertTrue(async_responded[0]['operation_id'])
-        self.assertEquals(async_responded[0]['flags'], ClientTerminal.Flags.NO_FLAGS)
+        self.assertEqual(async_responded[0]['flags'], ClientTerminal.Flags.NO_FLAGS)
 
         # cancel receive response operation
         receiveRequest()
         terminal_a.cancelReceiveRequest()
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
         self.assertTrue(async_requested[0]['err'])
-        self.assertEquals(bytearray(), async_requested[0]['payload'])
+        self.assertEqual(bytearray(), async_requested[0]['payload'])
         self.assertFalse(async_requested[0]['operation_id'])
 
     def testServiceClientProtoTerminals(self):
@@ -1105,20 +1105,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         # check that the completion handler can be called more than once for a single operation
         operation_id = request()
 
-        self.assertEquals(2, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertEquals(operation_id, async_responded[1]['operation_id'])
+        self.assertEqual(2, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(operation_id, async_responded[1]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
         self.assertFalse(async_responded[1]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['message'])
-        self.assertEquals(bytearray(), async_responded[1]['message'])
+        self.assertEqual(bytearray(), async_responded[0]['message'])
+        self.assertEqual(bytearray(), async_responded[1]['message'])
         self.assertIn(async_responded[0]['flags'], [ClientProtoTerminal.Flags.DEAF, ClientProtoTerminal.Flags.DEAF | ClientProtoTerminal.Flags.FINISHED])
         self.assertIn(async_responded[1]['flags'], [ClientProtoTerminal.Flags.DEAF, ClientProtoTerminal.Flags.DEAF | ClientProtoTerminal.Flags.FINISHED])
-        self.assertNotEquals(async_responded[0]['flags'], async_responded[1]['flags'])
+        self.assertNotEqual(async_responded[0]['flags'], async_responded[1]['flags'])
 
         # check that returning STOP from the completion handler stops notifications about received requests
         operation_id = request(True)
-        self.assertEquals(1, len(async_responded))
+        self.assertEqual(1, len(async_responded))
 
         # check synchronous methods
         def ignoreHandler(err, msg):
@@ -1126,14 +1126,14 @@ class ObjectOrientedApiTest(unittest.TestCase):
                 return None
 
             self.assertTrue(not err)
-            self.assertEquals(500, msg.value)
+            self.assertEqual(500, msg.value)
 
         def respondHandler(err, msg):
             if err.error_code == api.ErrorCodes.CANCELED:
                 return None
 
             self.assertTrue(not err or err.error_code == api.ErrorCodes.CANCELED)
-            self.assertEquals(500, msg.value)
+            self.assertEqual(500, msg.value)
             return msg
 
         terminal_a.request_handler = ignoreHandler
@@ -1152,13 +1152,13 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_b.request_handler = respondHandler
 
         response = terminal_c.request(msg, False)
-        self.assertEquals(500, response.value)
+        self.assertEqual(500, response.value)
 
         terminal_a.request_handler = respondHandler
         terminal_b.request_handler = ignoreHandler
 
         response = terminal_c.request(msg, False)
-        self.assertEquals(500, response.value)
+        self.assertEqual(500, response.value)
 
         terminal_a.request_handler = None
         terminal_b.request_handler = None
@@ -1171,9 +1171,9 @@ class ObjectOrientedApiTest(unittest.TestCase):
         receiveRequest()
         operation_id = request()
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
         self.assertFalse(async_requested[0]['err'])
-        self.assertEquals(123.456, async_requested[0]['message'].value)
+        self.assertEqual(123.456, async_requested[0]['message'].value)
         self.assertTrue(async_requested[0]['operation_id'])
 
         msg = terminal_a.makeResponseMessage()
@@ -1181,26 +1181,26 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_a.respondToRequest(async_requested[0]['operation_id'], msg)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(1, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(555, async_responded[0]['message'].value)
-        self.assertEquals(async_responded[0]['flags'], ClientProtoTerminal.Flags.FINISHED)
+        self.assertEqual(555, async_responded[0]['message'].value)
+        self.assertEqual(async_responded[0]['flags'], ClientProtoTerminal.Flags.FINISHED)
 
         # ignore a request
         receiveRequest()
         operation_id = request()
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
 
         terminal_a.ignoreRequest(async_requested[0]['operation_id'])
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(1, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['message'])
-        self.assertEquals(async_responded[0]['flags'], ClientProtoTerminal.Flags.IGNORED | ClientProtoTerminal.Flags.FINISHED)
+        self.assertEqual(bytearray(), async_responded[0]['message'])
+        self.assertEqual(async_responded[0]['flags'], ClientProtoTerminal.Flags.IGNORED | ClientProtoTerminal.Flags.FINISHED)
 
         # cancel request operation
         receiveRequest()
@@ -1208,20 +1208,20 @@ class ObjectOrientedApiTest(unittest.TestCase):
         terminal_c.cancelRequest(operation_id)
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_responded))
+        self.assertEqual(1, len(async_responded))
         self.assertTrue(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['message'])
+        self.assertEqual(bytearray(), async_responded[0]['message'])
         self.assertTrue(async_responded[0]['operation_id'])
-        self.assertEquals(async_responded[0]['flags'], ClientProtoTerminal.Flags.NO_FLAGS)
+        self.assertEqual(async_responded[0]['flags'], ClientProtoTerminal.Flags.NO_FLAGS)
 
         # cancel receive response operation
         receiveRequest()
         terminal_a.cancelReceiveRequest()
         time.sleep(0.02)
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
         self.assertTrue(async_requested[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['message'])
+        self.assertEqual(bytearray(), async_responded[0]['message'])
         self.assertFalse(async_requested[0]['operation_id'])
 
 

@@ -116,11 +116,11 @@ class ApiTest(unittest.TestCase):
         server.on_connected = serverConnectedFn
         server.on_disconnected = serverDisconnectedFn
 
-        self.assertEquals(leaf_a, server.endpoint)
+        self.assertEqual(leaf_a, server.endpoint)
         self.assertIsInstance(server.address, str)
         self.assertIsInstance(server.port, int)
-        self.assertEquals(None, server.identification)
-        self.assertEquals(None, server.timeout)
+        self.assertEqual(None, server.identification)
+        self.assertEqual(None, server.timeout)
 
         # setup the client
         clientConnection = []
@@ -134,13 +134,13 @@ class ApiTest(unittest.TestCase):
         client.on_connected = clientConnectedFn
         client.on_disconnected = clientDisconnectedFn
 
-        self.assertEquals(leaf_b, client.endpoint)
+        self.assertEqual(leaf_b, client.endpoint)
         self.assertIsInstance(client.host, str)
-        self.assertEquals(server.address, client.host)
+        self.assertEqual(server.address, client.host)
         self.assertIsInstance(client.port, int)
-        self.assertEquals(server.port, client.port)
-        self.assertEquals(None, client.identification)
-        self.assertEquals(None, client.timeout)
+        self.assertEqual(server.port, client.port)
+        self.assertEqual(None, client.identification)
+        self.assertEqual(None, client.timeout)
 
         # check that callbacks are invoked on connect
         server.waitUntilAtLeastOneConnected()
@@ -165,3 +165,7 @@ class ApiTest(unittest.TestCase):
         # wait until the connection is re-established
         client.waitUntilConnected()
         server.waitUntilAtLeastOneConnected()
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,4 +1,6 @@
 *.pyc
 .idea
 logfile.log
+chirp.dll
+libchirp.so
 

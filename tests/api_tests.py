@@ -29,14 +29,14 @@ class ApiTest(unittest.TestCase):
         with self.assertRaises(api.ErrorCode) as cm:
             api.initialise()
         self.assertLess(cm.exception.error_code, 0)
-        self.assertEquals(api.getErrorString(cm.exception.error_code), str(cm.exception))
+        self.assertEqual(api.getErrorString(cm.exception.error_code), str(cm.exception))
 
     def testVersion(self):
         self.assertRegexpMatches(api.getVersion(), r'^\d+\.\d+\.\d+(-[a-zA-Z0-9_-]+)?$')
 
     def testErrorStrings(self):
-        self.assertEquals('Success', api.getErrorString(0))
-        self.assertEquals('Unknown internal error occurred', api.getErrorString(-1))
+        self.assertEqual('Success', api.getErrorString(0))
+        self.assertEqual('Unknown internal error occurred', api.getErrorString(-1))
 
     def testLogFile(self):
         api.setLogFile(b'logfile.log', api.Verbosity.INFO)
@@ -258,7 +258,7 @@ class ApiTest(unittest.TestCase):
         time.sleep(0.1)
 
         self.assertTrue(self.async_err)
-        self.assertEquals(bytearray(), self.async_info)
+        self.assertEqual(bytearray(), self.async_info)
 
         # successful receive message operation
         self.resetAsyncData()
@@ -268,7 +268,7 @@ class ApiTest(unittest.TestCase):
 
         self.assertIsNotNone(self.async_err)
         self.assertFalse(self.async_err)
-        self.assertEquals(bytearray([1, 0, 3]), self.async_info)
+        self.assertEqual(bytearray([1, 0, 3]), self.async_info)
 
     def test_ScatterGatherTerminals(self):
         scheduler = api.createScheduler()
@@ -322,20 +322,20 @@ class ApiTest(unittest.TestCase):
         # check that the completion handler can be called more than once for a single operation
         operation_id = scatterGather()
 
-        self.assertEquals(2, len(async_gathered))
-        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
-        self.assertEquals(operation_id, async_gathered[1]['operation_id'])
+        self.assertEqual(2, len(async_gathered))
+        self.assertEqual(operation_id, async_gathered[0]['operation_id'])
+        self.assertEqual(operation_id, async_gathered[1]['operation_id'])
         self.assertFalse(async_gathered[0]['err'])
         self.assertFalse(async_gathered[1]['err'])
-        self.assertEquals(bytearray(), async_gathered[0]['payload'])
-        self.assertEquals(bytearray(), async_gathered[1]['payload'])
+        self.assertEqual(bytearray(), async_gathered[0]['payload'])
+        self.assertEqual(bytearray(), async_gathered[1]['payload'])
         self.assertIn(async_gathered[0]['flags'], [api.ScatterGatherFlags.DEAF, api.ScatterGatherFlags.DEAF | api.ScatterGatherFlags.FINISHED])
         self.assertIn(async_gathered[1]['flags'], [api.ScatterGatherFlags.DEAF, api.ScatterGatherFlags.DEAF | api.ScatterGatherFlags.FINISHED])
-        self.assertNotEquals(async_gathered[0]['flags'], async_gathered[1]['flags'])
+        self.assertNotEqual(async_gathered[0]['flags'], async_gathered[1]['flags'])
 
         # check that returning STOP from the completion handler stops notifications about received gather messages
         operation_id = scatterGather(True)
-        self.assertEquals(1, len(async_gathered))
+        self.assertEqual(1, len(async_gathered))
 
         # remove a binding so we only receive one gather message from now on
         api.destroy(binding_b)
@@ -345,34 +345,34 @@ class ApiTest(unittest.TestCase):
         receiveScatteredMessage()
         operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_scattered))
+        self.assertEqual(1, len(async_scattered))
         self.assertFalse(async_scattered[0]['err'])
-        self.assertEquals(bytearray([1, 0, 2]), async_scattered[0]['payload'])
+        self.assertEqual(bytearray([1, 0, 2]), async_scattered[0]['payload'])
         self.assertTrue(async_scattered[0]['operation_id'])
 
         api.sgRespondToScatteredMessage(terminal_a, async_scattered[0]['operation_id'], bytearray([2, 0, 3]))
         time.sleep(0.1)
 
-        self.assertEquals(1, len(async_gathered))
-        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
+        self.assertEqual(1, len(async_gathered))
+        self.assertEqual(operation_id, async_gathered[0]['operation_id'])
         self.assertFalse(async_gathered[0]['err'])
-        self.assertEquals(bytearray([2, 0, 3]), async_gathered[0]['payload'])
-        self.assertEquals(async_gathered[0]['flags'], api.ScatterGatherFlags.FINISHED)
+        self.assertEqual(bytearray([2, 0, 3]), async_gathered[0]['payload'])
+        self.assertEqual(async_gathered[0]['flags'], api.ScatterGatherFlags.FINISHED)
 
         # ignore a scattered message
         receiveScatteredMessage()
         operation_id = scatterGather()
 
-        self.assertEquals(1, len(async_scattered))
+        self.assertEqual(1, len(async_scattered))
 
         api.sgIgnoreScatteredMessage(terminal_a, async_scattered[0]['operation_id'])
         time.sleep(0.1)
 
-        self.assertEquals(1, len(async_gathered))
-        self.assertEquals(operation_id, async_gathered[0]['operation_id'])
+        self.assertEqual(1, len(async_gathered))
+        self.assertEqual(operation_id, async_gathered[0]['operation_id'])
         self.assertFalse(async_gathered[0]['err'])
-        self.assertEquals(bytearray(), async_gathered[0]['payload'])
-        self.assertEquals(async_gathered[0]['flags'], api.ScatterGatherFlags.IGNORED | api.ScatterGatherFlags.FINISHED)
+        self.assertEqual(bytearray(), async_gathered[0]['payload'])
+        self.assertEqual(async_gathered[0]['flags'], api.ScatterGatherFlags.IGNORED | api.ScatterGatherFlags.FINISHED)
 
         # cancel scatter-gather operation
         receiveScatteredMessage()
@@ -380,20 +380,20 @@ class ApiTest(unittest.TestCase):
         api.sgCancelScatterGather(terminal_c, operation_id)
         time.sleep(0.1)
 
-        self.assertEquals(1, len(async_gathered))
+        self.assertEqual(1, len(async_gathered))
         self.assertTrue(async_gathered[0]['err'])
-        self.assertEquals(bytearray(), async_gathered[0]['payload'])
+        self.assertEqual(bytearray(), async_gathered[0]['payload'])
         self.assertTrue(async_gathered[0]['operation_id'])
-        self.assertEquals(async_gathered[0]['flags'], api.ScatterGatherFlags.NO_FLAGS)
+        self.assertEqual(async_gathered[0]['flags'], api.ScatterGatherFlags.NO_FLAGS)
 
         # cancel receive scattered message operation
         receiveScatteredMessage()
         api.sgCancelReceiveScatteredMessage(terminal_a)
         time.sleep(0.1)
 
-        self.assertEquals(1, len(async_scattered))
+        self.assertEqual(1, len(async_scattered))
         self.assertTrue(async_scattered[0]['err'])
-        self.assertEquals(bytearray(), async_scattered[0]['payload'])
+        self.assertEqual(bytearray(), async_scattered[0]['payload'])
         self.assertFalse(async_scattered[0]['operation_id'])
 
     def testCachedPublishSubscribeTerminals(self):
@@ -419,7 +419,7 @@ class ApiTest(unittest.TestCase):
 
         self.assertTrue(async_data['err'])
         self.assertFalse(async_data['cached'])
-        self.assertEquals(bytearray(), async_data['payload'])
+        self.assertEqual(bytearray(), async_data['payload'])
 
         # successful receive message operation
         api.cpsAsyncReceiveMessage(terminal_b, receiveMessageCompletionHandler)
@@ -429,11 +429,11 @@ class ApiTest(unittest.TestCase):
         self.assertIsNotNone(async_data['err'])
         self.assertFalse(async_data['err'])
         self.assertFalse(async_data['cached'])
-        self.assertEquals(bytearray([1, 0, 3]), async_data['payload'])
+        self.assertEqual(bytearray([1, 0, 3]), async_data['payload'])
 
         # get cached message
         payload = api.cpsGetCachedMessage(terminal_b)
-        self.assertEquals(bytearray([1, 0, 3]), payload)
+        self.assertEqual(bytearray([1, 0, 3]), payload)
 
         # receive a cached message
         async_data = {}
@@ -445,7 +445,7 @@ class ApiTest(unittest.TestCase):
         self.assertIsNotNone(async_data['err'])
         self.assertFalse(async_data['err'])
         self.assertTrue(async_data['cached'])
-        self.assertEquals(bytearray([1, 0, 3]), async_data['payload'])
+        self.assertEqual(bytearray([1, 0, 3]), async_data['payload'])
 
     def testProducerConsumerTerminals(self):
         scheduler = api.createScheduler()
@@ -463,7 +463,7 @@ class ApiTest(unittest.TestCase):
         time.sleep(0.1)
 
         self.assertTrue(self.async_err)
-        self.assertEquals(bytearray(), self.async_info)
+        self.assertEqual(bytearray(), self.async_info)
 
         # successful receive message operation
         self.resetAsyncData()
@@ -473,7 +473,7 @@ class ApiTest(unittest.TestCase):
 
         self.assertIsNotNone(self.async_err)
         self.assertFalse(self.async_err)
-        self.assertEquals(bytearray([1, 0, 3]), self.async_info)
+        self.assertEqual(bytearray([1, 0, 3]), self.async_info)
 
     def testCachedProducerConsumerTerminals(self):
         scheduler = api.createScheduler()
@@ -498,7 +498,7 @@ class ApiTest(unittest.TestCase):
 
         self.assertTrue(async_data['err'])
         self.assertFalse(async_data['cached'])
-        self.assertEquals(bytearray(), async_data['payload'])
+        self.assertEqual(bytearray(), async_data['payload'])
 
         # successful receive message operation
         api.cpcAsyncReceiveMessage(terminal_b, receiveMessageCompletionHandler)
@@ -508,11 +508,11 @@ class ApiTest(unittest.TestCase):
         self.assertIsNotNone(async_data['err'])
         self.assertFalse(async_data['err'])
         self.assertFalse(async_data['cached'])
-        self.assertEquals(bytearray([1, 0, 3]), async_data['payload'])
+        self.assertEqual(bytearray([1, 0, 3]), async_data['payload'])
 
         # get cached message
         payload = api.cpcGetCachedMessage(terminal_b)
-        self.assertEquals(bytearray([1, 0, 3]), payload)
+        self.assertEqual(bytearray([1, 0, 3]), payload)
 
         # receive a cached message
         async_data = {}
@@ -524,7 +524,7 @@ class ApiTest(unittest.TestCase):
         self.assertIsNotNone(async_data['err'])
         self.assertFalse(async_data['err'])
         self.assertTrue(async_data['cached'])
-        self.assertEquals(bytearray([1, 0, 3]), async_data['payload'])
+        self.assertEqual(bytearray([1, 0, 3]), async_data['payload'])
 
     def testMasterSlaveTerminals(self):
         scheduler = api.createScheduler()
@@ -542,7 +542,7 @@ class ApiTest(unittest.TestCase):
         time.sleep(0.1)
 
         self.assertTrue(self.async_err)
-        self.assertEquals(bytearray(), self.async_info)
+        self.assertEqual(bytearray(), self.async_info)
 
         # successful receive message operation
         self.resetAsyncData()
@@ -552,7 +552,7 @@ class ApiTest(unittest.TestCase):
 
         self.assertIsNotNone(self.async_err)
         self.assertFalse(self.async_err)
-        self.assertEquals(bytearray([1, 0, 3]), self.async_info)
+        self.assertEqual(bytearray([1, 0, 3]), self.async_info)
 
     def testCachedMasterSlaveTerminals(self):
         scheduler = api.createScheduler()
@@ -577,7 +577,7 @@ class ApiTest(unittest.TestCase):
 
         self.assertTrue(async_data['err'])
         self.assertFalse(async_data['cached'])
-        self.assertEquals(bytearray(), async_data['payload'])
+        self.assertEqual(bytearray(), async_data['payload'])
 
         # successful receive message operation
         api.cmsAsyncReceiveMessage(terminal_b, receiveMessageCompletionHandler)
@@ -587,11 +587,11 @@ class ApiTest(unittest.TestCase):
         self.assertIsNotNone(async_data['err'])
         self.assertFalse(async_data['err'])
         self.assertFalse(async_data['cached'])
-        self.assertEquals(bytearray([1, 0, 3]), async_data['payload'])
+        self.assertEqual(bytearray([1, 0, 3]), async_data['payload'])
 
         # get cached message
         payload = api.cmsGetCachedMessage(terminal_b)
-        self.assertEquals(bytearray([1, 0, 3]), payload)
+        self.assertEqual(bytearray([1, 0, 3]), payload)
 
         # receive a cached message
         async_data = {}
@@ -603,7 +603,7 @@ class ApiTest(unittest.TestCase):
         self.assertIsNotNone(async_data['err'])
         self.assertFalse(async_data['err'])
         self.assertTrue(async_data['cached'])
-        self.assertEquals(bytearray([1, 0, 3]), async_data['payload'])
+        self.assertEqual(bytearray([1, 0, 3]), async_data['payload'])
 
     def test_ServiceClientTerminals(self):
         scheduler = api.createScheduler()
@@ -659,20 +659,20 @@ class ApiTest(unittest.TestCase):
         # check that the completion handler can be called more than once for a single operation
         operation_id = request()
 
-        self.assertEquals(2, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
-        self.assertEquals(operation_id, async_responded[1]['operation_id'])
+        self.assertEqual(2, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(operation_id, async_responded[1]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
         self.assertFalse(async_responded[1]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
-        self.assertEquals(bytearray(), async_responded[1]['payload'])
+        self.assertEqual(bytearray(), async_responded[0]['payload'])
+        self.assertEqual(bytearray(), async_responded[1]['payload'])
         self.assertIn(async_responded[0]['flags'], [api.ScatterGatherFlags.DEAF, api.ScatterGatherFlags.DEAF | api.ScatterGatherFlags.FINISHED])
         self.assertIn(async_responded[1]['flags'], [api.ScatterGatherFlags.DEAF, api.ScatterGatherFlags.DEAF | api.ScatterGatherFlags.FINISHED])
-        self.assertNotEquals(async_responded[0]['flags'], async_responded[1]['flags'])
+        self.assertNotEqual(async_responded[0]['flags'], async_responded[1]['flags'])
 
         # check that returning STOP from the completion handler stops notifications about received requests
         operation_id = request(True)
-        self.assertEquals(1, len(async_responded))
+        self.assertEqual(1, len(async_responded))
 
         # remove a terminal so we only receive one response from now on
         api.destroy(terminal_b)
@@ -682,34 +682,34 @@ class ApiTest(unittest.TestCase):
         receiveRequest()
         operation_id = request()
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
         self.assertFalse(async_requested[0]['err'])
-        self.assertEquals(bytearray([1, 0, 2]), async_requested[0]['payload'])
+        self.assertEqual(bytearray([1, 0, 2]), async_requested[0]['payload'])
         self.assertTrue(async_requested[0]['operation_id'])
 
         api.scRespondToRequest(terminal_a, async_requested[0]['operation_id'], bytearray([2, 0, 3]))
         time.sleep(0.1)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(1, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(bytearray([2, 0, 3]), async_responded[0]['payload'])
-        self.assertEquals(async_responded[0]['flags'], api.ScatterGatherFlags.FINISHED)
+        self.assertEqual(bytearray([2, 0, 3]), async_responded[0]['payload'])
+        self.assertEqual(async_responded[0]['flags'], api.ScatterGatherFlags.FINISHED)
 
         # ignore a request
         receiveRequest()
         operation_id = request()
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
 
         api.scIgnoreRequest(terminal_a, async_requested[0]['operation_id'])
         time.sleep(0.1)
 
-        self.assertEquals(1, len(async_responded))
-        self.assertEquals(operation_id, async_responded[0]['operation_id'])
+        self.assertEqual(1, len(async_responded))
+        self.assertEqual(operation_id, async_responded[0]['operation_id'])
         self.assertFalse(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
-        self.assertEquals(async_responded[0]['flags'], api.ScatterGatherFlags.IGNORED | api.ScatterGatherFlags.FINISHED)
+        self.assertEqual(bytearray(), async_responded[0]['payload'])
+        self.assertEqual(async_responded[0]['flags'], api.ScatterGatherFlags.IGNORED | api.ScatterGatherFlags.FINISHED)
 
         # cancel request operation
         receiveRequest()
@@ -717,20 +717,20 @@ class ApiTest(unittest.TestCase):
         api.scCancelRequest(terminal_c, operation_id)
         time.sleep(0.1)
 
-        self.assertEquals(1, len(async_responded))
+        self.assertEqual(1, len(async_responded))
         self.assertTrue(async_responded[0]['err'])
-        self.assertEquals(bytearray(), async_responded[0]['payload'])
+        self.assertEqual(bytearray(), async_responded[0]['payload'])
         self.assertTrue(async_responded[0]['operation_id'])
-        self.assertEquals(async_responded[0]['flags'], api.ScatterGatherFlags.NO_FLAGS)
+        self.assertEqual(async_responded[0]['flags'], api.ScatterGatherFlags.NO_FLAGS)
 
         # cancel receive response operation
         receiveRequest()
         api.scCancelReceiveRequest(terminal_a)
         time.sleep(0.1)
 
-        self.assertEquals(1, len(async_requested))
+        self.assertEqual(1, len(async_requested))
         self.assertTrue(async_requested[0]['err'])
-        self.assertEquals(bytearray(), async_requested[0]['payload'])
+        self.assertEqual(bytearray(), async_requested[0]['payload'])
         self.assertFalse(async_requested[0]['operation_id'])
 
 
