@@ -1,12 +1,14 @@
 setup.py
 pychirp/__init__.py
 pychirp/api.py
-pychirp/connections.py
-pychirp/convenience.py
+pychirp/binding.py
+pychirp/connection.py
 pychirp/leaf.py
 pychirp/node.py
 pychirp/object.py
 pychirp/scheduler.py
+pychirp/tcp.py
+pychirp/terminals.py
 pychirp.egg-info/PKG-INFO
 pychirp.egg-info/SOURCES.txt
 pychirp.egg-info/dependency_links.txt
