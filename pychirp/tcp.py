@@ -261,7 +261,6 @@ class SimpleTcpClient(object):
             return
 
         self._log('Connection {} established'.format(connection.description))
-        self._log('Assigning connection to the endpoint...')
         try:
             connection.assign(self.endpoint, self.timeout)
             connection.asyncAwaitDeath(lambda err: self._onConnectionDied(err, connection))
