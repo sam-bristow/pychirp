@@ -5,10 +5,9 @@ from pychirp.leaf import *
 from pychirp.connection import *
 from pychirp.binding import *
 from pychirp.terminals import *
-import proto.chirp_49164
+import proto.chirp_0000c00c
 import unittest
 import time
-import threading
 
 
 class ObjectOrientedApiTest(unittest.TestCase):
@@ -150,8 +149,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         leaf_a = Leaf(scheduler)
         leaf_b = Leaf(scheduler)
         connection = LocalConnection(leaf_a, leaf_b)
-        consumer = ConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_49164)
-        producer = ProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
+        consumer = ConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_0000c00c)
+        producer = ProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
         time.sleep(0.02)
 
         recv_msg = []
@@ -170,8 +169,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         self.assertEqual(recv_msg[0], recv_msg[1])
         self.assertEqual(recv_msg[0], (consumer.last_received_message, None))
 
-        consumer = CachedConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_49164)
-        producer = CachedProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
+        consumer = CachedConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_0000c00c)
+        producer = CachedProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
 
         consumer.waitUntilEstablished()
         time.sleep(0.02)
@@ -191,9 +190,9 @@ class ObjectOrientedApiTest(unittest.TestCase):
     def testProtoTerminalMixin(self):
         scheduler = Scheduler()
         leaf = Leaf(scheduler)
-        terminal = DeafMuteProtoTerminal(leaf, 'Voltage', proto.chirp_49164)
+        terminal = DeafMuteProtoTerminal(leaf, 'Voltage', proto.chirp_0000c00c)
 
-        self.assertEqual(terminal.proto_module, proto.chirp_49164)
+        self.assertEqual(terminal.proto_module, proto.chirp_0000c00c)
 
     def testDeafMuteTerminals(self):
         scheduler = Scheduler()
@@ -212,8 +211,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         leaf_a = Leaf(scheduler)
         leaf_b = Leaf(scheduler)
         connection = LocalConnection(leaf_a, leaf_b)
-        terminal_a = DeafMuteProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
-        terminal_b = DeafMuteProtoTerminal(leaf_b, 'Multimeter', proto.chirp_49164)
+        terminal_a = DeafMuteProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
+        terminal_b = DeafMuteProtoTerminal(leaf_b, 'Multimeter', proto.chirp_0000c00c)
         binding_b = Binding(terminal_b, 'Voltage')
         time.sleep(0.02)
 
@@ -240,8 +239,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         leaf_a = Leaf(scheduler)
         leaf_b = Leaf(scheduler)
         connection = LocalConnection(leaf_a, leaf_b)
-        terminal_a = PublishSubscribeProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
-        terminal_b = PublishSubscribeProtoTerminal(leaf_b, 'Multimeter', proto.chirp_49164)
+        terminal_a = PublishSubscribeProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
+        terminal_b = PublishSubscribeProtoTerminal(leaf_b, 'Multimeter', proto.chirp_0000c00c)
         binding_b = Binding(terminal_b, 'Voltage')
         time.sleep(0.02)
 
@@ -430,9 +429,9 @@ class ObjectOrientedApiTest(unittest.TestCase):
         connection_a = LocalConnection(node, leaf_a)
         connection_b = LocalConnection(node, leaf_b)
         connection_c = LocalConnection(node, leaf_c)
-        terminal_a = ScatterGatherProtoTerminal(leaf_a, 'Student', proto.chirp_49164)
-        terminal_b = ScatterGatherProtoTerminal(leaf_b, 'Student', proto.chirp_49164)
-        terminal_c = ScatterGatherProtoTerminal(leaf_c, 'Teacher', proto.chirp_49164)
+        terminal_a = ScatterGatherProtoTerminal(leaf_a, 'Student', proto.chirp_0000c00c)
+        terminal_b = ScatterGatherProtoTerminal(leaf_b, 'Student', proto.chirp_0000c00c)
+        terminal_c = ScatterGatherProtoTerminal(leaf_c, 'Teacher', proto.chirp_0000c00c)
         binding_a = Binding(terminal_a, 'Teacher')
         binding_b = Binding(terminal_b, 'Teacher')
         time.sleep(0.02)
@@ -628,8 +627,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         leaf_a = Leaf(scheduler)
         leaf_b = Leaf(scheduler)
         connection = LocalConnection(leaf_a, leaf_b)
-        terminal_a = CachedPublishSubscribeProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
-        terminal_b = CachedPublishSubscribeProtoTerminal(leaf_b, 'Multimeter', proto.chirp_49164)
+        terminal_a = CachedPublishSubscribeProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
+        terminal_b = CachedPublishSubscribeProtoTerminal(leaf_b, 'Multimeter', proto.chirp_0000c00c)
         binding_b = Binding(terminal_b, 'Voltage')
         time.sleep(0.02)
 
@@ -672,8 +671,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         leaf_a = Leaf(scheduler)
         leaf_b = Leaf(scheduler)
         connection = LocalConnection(leaf_a, leaf_b)
-        terminal_a = ProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
-        terminal_b = ConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_49164)
+        terminal_a = ProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
+        terminal_b = ConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_0000c00c)
         time.sleep(0.02)
 
         msg = terminal_a.makeMessage()
@@ -714,8 +713,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         leaf_a = Leaf(scheduler)
         leaf_b = Leaf(scheduler)
         connection = LocalConnection(leaf_a, leaf_b)
-        terminal_a = CachedProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
-        terminal_b = CachedConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_49164)
+        terminal_a = CachedProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
+        terminal_b = CachedConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_0000c00c)
         time.sleep(0.02)
 
         # publish a message
@@ -764,8 +763,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         leaf_a = Leaf(scheduler)
         leaf_b = Leaf(scheduler)
         connection = LocalConnection(leaf_a, leaf_b)
-        terminal_a = MasterProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
-        terminal_b = SlaveProtoTerminal(leaf_b, 'Voltage', proto.chirp_49164)
+        terminal_a = MasterProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
+        terminal_b = SlaveProtoTerminal(leaf_b, 'Voltage', proto.chirp_0000c00c)
         time.sleep(0.02)
 
         msg = terminal_a.makeMessage()
@@ -834,8 +833,8 @@ class ObjectOrientedApiTest(unittest.TestCase):
         leaf_a = Leaf(scheduler)
         leaf_b = Leaf(scheduler)
         connection = LocalConnection(leaf_a, leaf_b)
-        terminal_a = CachedMasterProtoTerminal(leaf_a, 'Voltage', proto.chirp_49164)
-        terminal_b = CachedSlaveProtoTerminal(leaf_b, 'Voltage', proto.chirp_49164)
+        terminal_a = CachedMasterProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
+        terminal_b = CachedSlaveProtoTerminal(leaf_b, 'Voltage', proto.chirp_0000c00c)
         time.sleep(0.02)
 
         # publish a message on the Master Terminal
@@ -1060,9 +1059,9 @@ class ObjectOrientedApiTest(unittest.TestCase):
         connection_a = LocalConnection(node, leaf_a)
         connection_b = LocalConnection(node, leaf_b)
         connection_c = LocalConnection(node, leaf_c)
-        terminal_a = ServiceProtoTerminal(leaf_a, 'Student', proto.chirp_49164)
-        terminal_b = ServiceProtoTerminal(leaf_b, 'Student', proto.chirp_49164)
-        terminal_c = ClientProtoTerminal(leaf_c, 'Student', proto.chirp_49164)
+        terminal_a = ServiceProtoTerminal(leaf_a, 'Student', proto.chirp_0000c00c)
+        terminal_b = ServiceProtoTerminal(leaf_b, 'Student', proto.chirp_0000c00c)
+        terminal_c = ClientProtoTerminal(leaf_c, 'Student', proto.chirp_0000c00c)
         time.sleep(0.02)
 
         async_requested = []

@@ -3,6 +3,7 @@ from . import binding
 from . import connection
 from . import leaf
 from . import node
+from . import process
 from . import scheduler
 from . import tcp
 from . import terminals
