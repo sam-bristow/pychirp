@@ -65,6 +65,13 @@ class _PublishMixin(object):
     def publishMessage(self, data):
         self._publish_message_fn(self.handle, self._userFacingDataTypeToPayload(data, _ProtoMessageType.PUBLISH))
 
+    def tryPublishMessage(self, data):
+        try:
+            self.publishMessage(data)
+            return True
+        except:
+            return False
+
 
 class _SubscribeMixin(object):
     def __init__(self, async_receive_message_fn):
@@ -329,7 +336,7 @@ class _ClientMixin(_ScatterOrClientMixin):
 
 class _ProtoTerminalMixin(object):
     def __init__(self, terminal_class, leaf, name, proto_module):
-        signature = proto_module.DESCRIPTOR.GetOptions().Extensions[proto_module.signature]
+        signature = proto_module.PublishMessage.SIGNATURE
         terminal_class.__init__(self, leaf, name, signature)
         self._proto_module = proto_module
 
