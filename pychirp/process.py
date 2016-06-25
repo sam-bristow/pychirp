@@ -1,3 +1,4 @@
+from __future__ import print_function
 import argparse as _argparse
 import glob as _glob
 import json as _json
