@@ -135,7 +135,6 @@ class SimpleTcpServer(object):
                 self._active_connections[0].tryDestroy()
                 self._active_connections = []
 
-        self._log('Assigning connection to the endpoint...')
         try:
             connection.assign(self.endpoint, self.timeout)
             connection.asyncAwaitDeath(lambda err: self._onConnectionDied(err, connection))

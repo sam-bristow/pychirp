@@ -27,7 +27,11 @@ class _BindingMixin(object):
                         fn()
 
                     self._cv.notifyAll()
-            _api.asyncAwaitBindingStateChange(self.handle, self._bindingStateCompletionHandler)
+                if self.handle:
+                    try:
+                        _api.asyncAwaitBindingStateChange(self.handle, self._bindingStateCompletionHandler)
+                    except:
+                        pass
 
     @property
     def on_binding_established(self):
@@ -57,7 +61,7 @@ class _BindingMixin(object):
     def is_established(self):
         return self._is_established
 
-    def _waitUntilState(self, state):
+    def _waitUntilBindingState(self, state):
         with self._cv:
             while self._is_established != state and self.is_alive:
                 self._cv.wait()
@@ -65,10 +69,10 @@ class _BindingMixin(object):
                 raise Exception('The object has been destroyed')
 
     def waitUntilEstablished(self):
-        self._waitUntilState(True)
+        self._waitUntilBindingState(True)
 
     def waitUntilReleased(self):
-        self._waitUntilState(False)
+        self._waitUntilBindingState(False)
 
     def destroy(self):
         super(_BindingMixin, self).destroy()

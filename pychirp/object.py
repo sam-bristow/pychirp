@@ -14,8 +14,14 @@ class ChirpObject(object):
                 pass
 
     def destroy(self):
-        _api.destroy(self._handle)
+        handle = self._handle
         self._handle = _api.Handle()
+
+        try:
+            _api.destroy(handle)
+        except:
+            self._handle = handle
+            raise
 
     def tryDestroy(self):
         try:

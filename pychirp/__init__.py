@@ -7,3 +7,4 @@ from . import process
 from . import scheduler
 from . import tcp
 from . import terminals
+from . import test

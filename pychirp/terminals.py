@@ -135,6 +135,90 @@ class _SubscribeMixin(object):
             self._cv.notifyAll()
 
 
+class _SubscribableMixin(object):
+    def __init__(self):
+        self._on_subscribed = None
+        self._on_unsubscribed = None
+        self._on_subscription_state_changed = None
+        self._is_subscribed = False
+        self._subscription_cv = _threading.Condition()
+
+        _api.asyncGetSubscriptionState(self.handle, self._subscriptionStateCompletionHandler)
+
+    def _subscriptionStateCompletionHandler(self, err, is_established):
+        if not err:
+            with self._subscription_cv:
+                if self._is_subscribed != is_established:
+                    self._is_subscribed = is_established
+
+                    if self._on_subscription_state_changed:
+                        self._on_subscription_state_changed(is_established)
+
+                    fn = self._on_subscribed if is_established else self._on_unsubscribed
+                    if fn:
+                        fn()
+
+                    self._subscription_cv.notifyAll()
+                if self.handle:
+                    try:
+                        _api.asyncAwaitSubscriptionStateChange(self.handle, self._subscriptionStateCompletionHandler)
+                    except:
+                        pass
+
+    @property
+    def on_subscribed(self):
+        return self._on_subscribed
+
+    @on_subscribed.setter
+    def on_subscribed(self, fn):
+        self._on_subscribed = fn
+
+    @property
+    def on_unsubscribed(self):
+        return self._on_unsubscribed
+
+    @on_unsubscribed.setter
+    def on_unsubscribed(self, fn):
+        self._on_unsubscribed = fn
+
+    @property
+    def on_subscription_state_changed(self):
+        return self._on_subscription_state_changed
+
+    @on_subscription_state_changed.setter
+    def on_subscription_state_changed(self, fn):
+        self._on_subscription_state_changed = fn
+
+    @property
+    def is_subscribed(self):
+        return self._is_subscribed
+
+    def _waitUntilSubscriptionState(self, state):
+        with self._subscription_cv:
+            while self._is_subscribed != state and self.is_alive:
+                self._subscription_cv.wait()
+            if not self.is_alive:
+                raise Exception('The object has been destroyed')
+
+    def waitUntilSubscribed(self):
+        self._waitUntilSubscriptionState(True)
+
+    def waitUntilUnsubscribed(self):
+        self._waitUntilSubscriptionState(False)
+
+    def destroy(self):
+        super(_SubscribableMixin, self).destroy()
+        with self._subscription_cv:
+            self._subscription_cv.notifyAll()
+
+    def tryDestroy(self):
+        if not super(_SubscribableMixin, self).tryDestroy():
+            return False
+        with self._subscription_cv:
+            self._subscription_cv.notifyAll()
+        return True
+
+
 class _GatherOrServiceMixin(object):
     def __init__(self, async_receive_scattered_message_fn, cancel_receive_scattered_message_fn, respond_to_scattered_message_fn, ignore_scattered_message_fn):
         self._async_receive_scattered_message_fn = async_receive_scattered_message_fn
@@ -335,9 +419,9 @@ class _ClientMixin(_ScatterOrClientMixin):
 
 
 class _ProtoTerminalMixin(object):
-    def __init__(self, terminal_class, leaf, name, proto_module):
+    def __init__(self, leaf, name, proto_module):
         signature = proto_module.PublishMessage.SIGNATURE
-        terminal_class.__init__(self, leaf, name, signature)
+        self.TerminalClass.__init__(self, leaf, name, signature)
         self._proto_module = proto_module
 
     @property
@@ -375,164 +459,308 @@ class _MakeRequestResponseMessagesMixin(object):
 
 
 class DeafMuteTerminal(_ManualBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.DEAF_MUTE
+
     def __init__(self, leaf, name, signature):
-        super(DeafMuteTerminal, self).__init__(leaf, _api.TerminalTypes.DEAF_MUTE, name, signature)
+        super(DeafMuteTerminal, self).__init__(leaf, self.TERMINAL_TYPE, name, signature)
 
 
 class DeafMuteProtoTerminal(_ProtoTerminalMixin, DeafMuteTerminal):
+    TerminalClass = DeafMuteTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, DeafMuteTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class PublishSubscribeTerminal(_PublishMixin, _SubscribeMixin, _ManualBindTerminal):
+DeafMuteTerminal.CounterTerminalType = DeafMuteTerminal
+DeafMuteTerminal.ProtoTerminalClass = DeafMuteProtoTerminal
+
+
+class PublishSubscribeTerminal(_PublishMixin, _SubscribeMixin, _SubscribableMixin, _ManualBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.PUBLISH_SUBSCRIBE
+
     def __init__(self, leaf, name, signature):
-        _ManualBindTerminal.__init__(self, leaf, _api.TerminalTypes.PUBLISH_SUBSCRIBE, name, signature)
+        _ManualBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _SubscribeMixin.__init__(self, _api.psAsyncReceiveMessage)
         _PublishMixin.__init__(self, _api.psPublish)
 
 
 class PublishSubscribeProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, PublishSubscribeTerminal):
+    TerminalClass = PublishSubscribeTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, PublishSubscribeTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class ScatterGatherTerminal(_ScatterMixin, _GatherMixin, _ManualBindTerminal):
+PublishSubscribeTerminal.CounterTerminalType = PublishSubscribeTerminal
+PublishSubscribeTerminal.ProtoTerminalClass = PublishSubscribeProtoTerminal
+
+
+class ScatterGatherTerminal(_ScatterMixin, _GatherMixin, _SubscribableMixin, _ManualBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.SCATTER_GATHER
+
     def __init__(self, leaf, name, signature):
-        _ManualBindTerminal.__init__(self, leaf, _api.TerminalTypes.SCATTER_GATHER, name, signature)
+        _ManualBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _ScatterMixin.__init__(self, _api.sgAsyncScatterGather, _api.sgCancelScatterGather)
         _GatherMixin.__init__(self, _api.sgAsyncReceiveScatteredMessage, _api.sgCancelReceiveScatteredMessage, _api.sgRespondToScatteredMessage, _api.sgIgnoreScatteredMessage)
 
 
 class ScatterGatherProtoTerminal(_MakeRequestResponseMessagesMixin, _ProtoTerminalMixin, ScatterGatherTerminal):
+    TerminalClass = ScatterGatherTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, ScatterGatherTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class CachedPublishSubscribeTerminal(_CacheMixin, _PublishMixin, _SubscribeMixin, _ManualBindTerminal):
+ScatterGatherTerminal.CounterTerminalType = ScatterGatherTerminal
+ScatterGatherTerminal.ProtoTerminalClass = ScatterGatherProtoTerminal
+
+
+class CachedPublishSubscribeTerminal(_CacheMixin, _PublishMixin, _SubscribeMixin, _SubscribableMixin, _ManualBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.CACHED_PUBLISH_SUBSCRIBE
+
     def __init__(self, leaf, name, signature):
-        _ManualBindTerminal.__init__(self, leaf, _api.TerminalTypes.CACHED_PUBLISH_SUBSCRIBE, name, signature)
+        _ManualBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
         _SubscribeMixin.__init__(self, _api.cpsAsyncReceiveMessage)
+        _SubscribableMixin.__init__(self)
         _PublishMixin.__init__(self, _api.cpsPublish)
         _CacheMixin.__init__(self, _api.cpsGetCachedMessage)
 
 
 class CachedPublishSubscribeProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, CachedPublishSubscribeTerminal):
+    TerminalClass = CachedPublishSubscribeTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, CachedPublishSubscribeTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class ProducerTerminal(_PublishMixin, _Terminal):
+CachedPublishSubscribeTerminal.CounterTerminalType = CachedPublishSubscribeTerminal
+CachedPublishSubscribeTerminal.ProtoTerminalClass = CachedPublishSubscribeProtoTerminal
+
+
+class ProducerTerminal(_PublishMixin, _SubscribableMixin, _Terminal):
+    TERMINAL_TYPE = _api.TerminalTypes.PRODUCER
+
     def __init__(self, leaf, name, signature):
-        _Terminal.__init__(self, leaf, _api.TerminalTypes.PRODUCER, name, signature)
+        _Terminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _PublishMixin.__init__(self, _api.pcPublish)
 
 
 class ProducerProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, ProducerTerminal):
+    TerminalClass = ProducerTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, ProducerTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
+
+
+ProducerTerminal.ProtoTerminalClass = ProducerProtoTerminal
 
 
 class ConsumerTerminal(_SubscribeMixin, _AutoBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.CONSUMER
+
     def __init__(self, leaf, name, signature):
-        _AutoBindTerminal.__init__(self, leaf, _api.TerminalTypes.CONSUMER, name, signature)
+        _AutoBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
         _SubscribeMixin.__init__(self, _api.pcAsyncReceiveMessage)
 
 
 class ConsumerProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, ConsumerTerminal):
+    TerminalClass = ConsumerTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, ConsumerTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class CachedProducerTerminal(_PublishMixin, _Terminal):
+ProducerTerminal.CounterTerminalType = ConsumerTerminal
+ConsumerTerminal.CounterTerminalType = ProducerTerminal
+ConsumerTerminal.ProtoTerminalClass = ConsumerProtoTerminal
+
+
+class CachedProducerTerminal(_PublishMixin, _SubscribableMixin, _Terminal):
+    TERMINAL_TYPE = _api.TerminalTypes.CACHED_PRODUCER
+
     def __init__(self, leaf, name, signature):
-        _Terminal.__init__(self, leaf, _api.TerminalTypes.CACHED_PRODUCER, name, signature)
+        _Terminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _PublishMixin.__init__(self, _api.cpcPublish)
 
 
 class CachedProducerProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, CachedProducerTerminal):
+    TerminalClass = CachedProducerTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, CachedProducerTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
+
+
+CachedProducerTerminal.ProtoTerminalClass = CachedProducerProtoTerminal
 
 
 class CachedConsumerTerminal(_CacheMixin, _SubscribeMixin, _AutoBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.CACHED_CONSUMER
+
     def __init__(self, leaf, name, signature):
-        _AutoBindTerminal.__init__(self, leaf, _api.TerminalTypes.CACHED_CONSUMER, name, signature)
+        _AutoBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
         _SubscribeMixin.__init__(self, _api.cpcAsyncReceiveMessage)
         _CacheMixin.__init__(self, _api.cpcGetCachedMessage)
 
 
 class CachedConsumerProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, CachedConsumerTerminal):
+    TerminalClass = CachedConsumerTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, CachedConsumerTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class MasterTerminal(_PublishMixin, _SubscribeMixin, _AutoBindTerminal):
+CachedProducerTerminal.CounterTerminalType = CachedConsumerTerminal
+CachedConsumerTerminal.CounterTerminalType = CachedProducerTerminal
+CachedConsumerTerminal.ProtoTerminalClass = CachedConsumerProtoTerminal
+
+
+class MasterTerminal(_PublishMixin, _SubscribeMixin, _SubscribableMixin, _AutoBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.MASTER
+
     def __init__(self, leaf, name, signature):
-        _AutoBindTerminal.__init__(self, leaf, _api.TerminalTypes.MASTER, name, signature)
+        _AutoBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _SubscribeMixin.__init__(self, _api.msAsyncReceiveMessage)
         _PublishMixin.__init__(self, _api.msPublish)
 
 
 class MasterProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, MasterTerminal):
+    TerminalClass = MasterTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, MasterTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class SlaveTerminal(_PublishMixin, _SubscribeMixin, _AutoBindTerminal):
+MasterProtoTerminal.ProtoTerminalClass = MasterProtoTerminal
+
+
+class SlaveTerminal(_PublishMixin, _SubscribeMixin, _SubscribableMixin, _AutoBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.SLAVE
+
     def __init__(self, leaf, name, signature):
-        _AutoBindTerminal.__init__(self, leaf, _api.TerminalTypes.SLAVE, name, signature)
+        _AutoBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _SubscribeMixin.__init__(self, _api.msAsyncReceiveMessage)
         _PublishMixin.__init__(self, _api.msPublish)
 
 
 class SlaveProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, SlaveTerminal):
+    TerminalClass = SlaveTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, SlaveTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class CachedMasterTerminal(_CacheMixin, _PublishMixin, _SubscribeMixin, _AutoBindTerminal):
+MasterTerminal.CounterTerminalType = SlaveTerminal
+SlaveTerminal.CounterTerminalType = MasterTerminal
+SlaveProtoTerminal.ProtoTerminalClass = SlaveProtoTerminal
+
+
+class CachedMasterTerminal(_CacheMixin, _PublishMixin, _SubscribeMixin, _SubscribableMixin, _AutoBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.CACHED_MASTER
+
     def __init__(self, leaf, name, signature):
-        _AutoBindTerminal.__init__(self, leaf, _api.TerminalTypes.CACHED_MASTER, name, signature)
+        _AutoBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _SubscribeMixin.__init__(self, _api.cmsAsyncReceiveMessage)
         _PublishMixin.__init__(self, _api.cmsPublish)
         _CacheMixin.__init__(self, _api.cmsGetCachedMessage)
 
 
 class CachedMasterProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, CachedMasterTerminal):
+    TerminalClass = CachedMasterTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, CachedMasterTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class CachedSlaveTerminal(_CacheMixin, _PublishMixin, _SubscribeMixin, _AutoBindTerminal):
+CachedMasterTerminal.ProtoTerminalClass = CachedMasterProtoTerminal
+
+
+class CachedSlaveTerminal(_CacheMixin, _PublishMixin, _SubscribeMixin, _SubscribableMixin, _AutoBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.CACHED_SLAVE
+
     def __init__(self, leaf, name, signature):
-        _AutoBindTerminal.__init__(self, leaf, _api.TerminalTypes.CACHED_SLAVE, name, signature)
+        _AutoBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _SubscribeMixin.__init__(self, _api.cmsAsyncReceiveMessage)
         _PublishMixin.__init__(self, _api.cmsPublish)
         _CacheMixin.__init__(self, _api.cmsGetCachedMessage)
 
 
 class CachedSlaveProtoTerminal(_MakePublishMessageMixin, _ProtoTerminalMixin, CachedSlaveTerminal):
+    TerminalClass = CachedSlaveTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, CachedSlaveTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
+
+
+CachedMasterTerminal.CounterTerminalType = CachedSlaveTerminal
+CachedSlaveTerminal.CounterTerminalType = CachedMasterTerminal
+CachedSlaveTerminal.ProtoTerminalClass = CachedSlaveProtoTerminal
 
 
 class ServiceTerminal(_ServiceMixin, _AutoBindTerminal):
+    TERMINAL_TYPE = _api.TerminalTypes.SERVICE
+
     def __init__(self, leaf, name, signature):
-        _AutoBindTerminal.__init__(self, leaf, _api.TerminalTypes.SERVICE, name, signature)
+        _AutoBindTerminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
         _ServiceMixin.__init__(self, _api.scAsyncReceiveRequest, _api.scCancelReceiveRequest, _api.scRespondToRequest, _api.scIgnoreRequest)
 
 
 class ServiceProtoTerminal(_MakeRequestResponseMessagesMixin, _ProtoTerminalMixin, ServiceTerminal):
+    TerminalClass = ServiceTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, ServiceTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
 
 
-class ClientTerminal(_ClientMixin, _Terminal):
+ServiceTerminal.ProtoTerminalClass = ServiceProtoTerminal
+
+
+class ClientTerminal(_ClientMixin, _SubscribableMixin, _Terminal):
+    TERMINAL_TYPE = _api.TerminalTypes.CLIENT
+
     def __init__(self, leaf, name, signature):
-        _Terminal.__init__(self, leaf, _api.TerminalTypes.CLIENT, name, signature)
+        _Terminal.__init__(self, leaf, self.TERMINAL_TYPE, name, signature)
+        _SubscribableMixin.__init__(self)
         _ClientMixin.__init__(self, _api.scAsyncRequest, _api.scCancelRequest)
 
 
 class ClientProtoTerminal(_MakeRequestResponseMessagesMixin, _ProtoTerminalMixin, ClientTerminal):
+    TerminalClass = ClientTerminal
+
     def __init__(self, leaf, name, proto_module):
-        _ProtoTerminalMixin.__init__(self, ClientTerminal, leaf, name, proto_module)
+        _ProtoTerminalMixin.__init__(self, leaf, name, proto_module)
+
+
+ServiceTerminal.CounterTerminalType = ClientTerminal
+ClientTerminal.CounterTerminalType = ServiceTerminal
+ClientTerminal.ProtoTerminalClass = ClientProtoTerminal
+
+
+_TERMINAL_TYPE_TO_CLASS = [
+    DeafMuteTerminal,
+    PublishSubscribeTerminal,
+    ScatterGatherTerminal,
+    CachedPublishSubscribeTerminal,
+    ProducerTerminal,
+    ConsumerTerminal,
+    CachedProducerTerminal,
+    CachedConsumerTerminal,
+    MasterTerminal,
+    SlaveTerminal,
+    CachedMasterTerminal,
+    CachedSlaveTerminal,
+    ServiceTerminal,
+    ClientTerminal
+]
+
+
+def terminalTypeToClass(terminalType):
+    return _TERMINAL_TYPE_TO_CLASS[terminalType]

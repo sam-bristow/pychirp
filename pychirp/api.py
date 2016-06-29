@@ -9,16 +9,18 @@ GET_REMOTE_VERSION_BUFFER_SIZE           = 32
 GET_REMOTE_IDENTIFICATION_BUFFER_SIZE    = 1024
 RECEIVE_MESSAGE_BUFFER_SIZE              = 1024 * 64
 
-ASYNC_AWAIT_KNOWN_TERMINALS_CHANGE_CALLBACK = CFUNCTYPE(None, c_int, c_void_p)
-ASYNC_GET_BINDING_STATE_CALLBACK            = CFUNCTYPE(None, c_int, c_int, c_void_p)
-ASYNC_AWAIT_BINDING_STATE_CHANGE_CALLBACK   = CFUNCTYPE(None, c_int, c_int, c_void_p)
-ASYNC_TCP_ACCEPT_CALLBACK                   = CFUNCTYPE(None, c_int, c_void_p, c_void_p)
-ASYNC_TCP_CONNECT_CALLBACK                  = CFUNCTYPE(None, c_int, c_void_p, c_void_p)
-ASYNC_AWAIT_CONNECTION_DEATH_CALLBACK       = CFUNCTYPE(None, c_int, c_void_p)
-PS_ASYNC_RECEIVE_MESSAGE_CALLBACK           = CFUNCTYPE(None, c_int, c_uint, c_void_p)
-SG_ASYNC_SCATTER_GATHER_CALLBACK            = CFUNCTYPE(c_int, c_int, c_int, c_int, c_uint, c_void_p)
-SG_ASYNC_RECEIVE_SCATTERED_MESSAGE_CALLBACK = CFUNCTYPE(None, c_int, c_int, c_uint, c_void_p)
-CPS_ASYNC_RECEIVE_MESSAGE_CALLBACK          = CFUNCTYPE(None, c_int, c_uint, c_int, c_void_p)
+ASYNC_AWAIT_KNOWN_TERMINALS_CHANGE_CALLBACK    = CFUNCTYPE(None, c_int, c_void_p)
+ASYNC_GET_BINDING_STATE_CALLBACK               = CFUNCTYPE(None, c_int, c_int, c_void_p)
+ASYNC_AWAIT_BINDING_STATE_CHANGE_CALLBACK      = CFUNCTYPE(None, c_int, c_int, c_void_p)
+ASYNC_GET_SUBSCRIPTION_STATE_CALLBACK          = CFUNCTYPE(None, c_int, c_int, c_void_p)
+ASYNC_AWAIT_SUBSCRIPTION_STATE_CHANGE_CALLBACK = CFUNCTYPE(None, c_int, c_int, c_void_p)
+ASYNC_TCP_ACCEPT_CALLBACK                      = CFUNCTYPE(None, c_int, c_void_p, c_void_p)
+ASYNC_TCP_CONNECT_CALLBACK                     = CFUNCTYPE(None, c_int, c_void_p, c_void_p)
+ASYNC_AWAIT_CONNECTION_DEATH_CALLBACK          = CFUNCTYPE(None, c_int, c_void_p)
+PS_ASYNC_RECEIVE_MESSAGE_CALLBACK              = CFUNCTYPE(None, c_int, c_uint, c_void_p)
+SG_ASYNC_SCATTER_GATHER_CALLBACK               = CFUNCTYPE(c_int, c_int, c_int, c_int, c_uint, c_void_p)
+SG_ASYNC_RECEIVE_SCATTERED_MESSAGE_CALLBACK    = CFUNCTYPE(None, c_int, c_int, c_uint, c_void_p)
+CPS_ASYNC_RECEIVE_MESSAGE_CALLBACK             = CFUNCTYPE(None, c_int, c_uint, c_int, c_void_p)
 
 
 class ErrorCodes:
@@ -431,6 +433,51 @@ def asyncAwaitBindingStateChange(binding_handle, completion_handler):
 
 @_return_void(_chirp.CHIRP_CancelAwaitBindingStateChange, [c_void_p])
 def cancelAwaitBindingStateChange(binding_handle):
+    pass
+
+
+@_custom_call(_chirp.CHIRP_GetSubscriptionState, [c_void_p, POINTER(c_int)])
+def getSubscriptionState(terminal_handle):
+    state = c_int()
+    res = _chirp.CHIRP_GetSubscriptionState(terminal_handle, byref(state))
+    if not res:
+        raise ErrorCode(res)
+
+    return False if state.value == 0 else True
+
+
+@_custom_call(_chirp.CHIRP_AsyncGetSubscriptionState, [c_void_p, ASYNC_GET_SUBSCRIPTION_STATE_CALLBACK, c_void_p])
+def asyncGetSubscriptionState(terminal_handle, completion_handler):
+    def fn(res, state, user_arg):
+        err = ErrorCode(Result(res))
+        info = None
+        if not err:
+            info = False if state == 0 else True
+
+        completion_handler(err, info)
+
+    res = _chirp.CHIRP_AsyncGetSubscriptionState(terminal_handle, _wrap_callback(ASYNC_GET_SUBSCRIPTION_STATE_CALLBACK, fn), c_void_p())
+    if not res:
+        raise ErrorCode(res)
+
+
+@_custom_call(_chirp.CHIRP_AsyncAwaitSubscriptionStateChange, [c_void_p, ASYNC_AWAIT_SUBSCRIPTION_STATE_CHANGE_CALLBACK, c_void_p])
+def asyncAwaitSubscriptionStateChange(terminal_handle, completion_handler):
+    def fn(res, state, user_arg):
+        err = ErrorCode(Result(res))
+        info = None
+        if not err:
+            info = False if state == 0 else True
+
+        completion_handler(err, info)
+
+    res = _chirp.CHIRP_AsyncAwaitSubscriptionStateChange(terminal_handle, _wrap_callback(ASYNC_AWAIT_SUBSCRIPTION_STATE_CHANGE_CALLBACK, fn), c_void_p())
+    if not res:
+        raise ErrorCode(res)
+
+
+@_return_void(_chirp.CHIRP_CancelAwaitSubscriptionStateChange, [c_void_p])
+def cancelAwaitSubscriptionStateChange(terminal_handle):
     pass
 
 

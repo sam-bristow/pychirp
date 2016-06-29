@@ -57,7 +57,7 @@ class ObjectOrientedApiTest(unittest.TestCase):
         self.assertFalse(self.async_err)
         self.assertDictEqual({
             'added'     : True,
-            'type'      : 1,
+            'type'      : PublishSubscribeTerminal,
             'name'      : 'Terminal B',
             'signature' : 456
         }, self.async_info)
@@ -65,11 +65,11 @@ class ObjectOrientedApiTest(unittest.TestCase):
         # get a list of all known terminals synchronously
         known_terminals = node.getKnownTerminals()
         self.assertListEqual([{
-            'type'      : 0,
+            'type'      : DeafMuteTerminal,
             'name'      : 'Terminal A',
             'signature' : 123
         }, {
-            'type'      : 1,
+            'type'      : PublishSubscribeTerminal,
             'name'      : 'Terminal B',
             'signature' : 456
         }], known_terminals)
@@ -93,7 +93,7 @@ class ObjectOrientedApiTest(unittest.TestCase):
         self.assertFalse(self.async_err)
         self.assertDictEqual({
             'added'     : False,
-            'type'      : 0,
+            'type'      : DeafMuteTerminal,
             'name'      : 'Terminal A',
             'signature' : 123
         }, self.async_info)
@@ -142,6 +142,52 @@ class ObjectOrientedApiTest(unittest.TestCase):
         binding.waitUntilReleased()
         self.assertFalse(established)
         self.assertTrue(released)
+        self.assertFalse(changed[0])
+
+    def testSubscribableMixin(self):
+        scheduler = Scheduler()
+        leaf_a = Leaf(scheduler)
+        leaf_b = Leaf(scheduler)
+        connection = LocalConnection(leaf_a, leaf_b)
+        terminal_a = PublishSubscribeTerminal(leaf_a, 'Terminal A', 123)
+        terminal_b = PublishSubscribeTerminal(leaf_b, 'Terminal B', 123)
+
+        self.assertFalse(terminal_a.is_subscribed)
+
+        subscribed = []
+
+        def onSubscribed():
+            subscribed.append(True)
+
+        terminal_a.on_subscribed = onSubscribed
+
+        unsubscribed = []
+
+        def onUnsubscribed():
+            unsubscribed.append(True)
+
+        terminal_a.on_unsubscribed = onUnsubscribed
+
+        changed = []
+
+        def onChanged(is_subscribed):
+            changed.append(is_subscribed)
+
+        terminal_a.on_subscription_state_changed = onChanged
+
+        binding = Binding(terminal_b, 'Terminal A')
+        terminal_a.waitUntilSubscribed()
+        self.assertTrue(subscribed)
+        self.assertFalse(unsubscribed)
+        self.assertTrue(changed[0])
+
+        del subscribed[:]
+        del changed[:]
+
+        binding.destroy()
+        terminal_a.waitUntilUnsubscribed()
+        self.assertFalse(subscribed)
+        self.assertTrue(unsubscribed)
         self.assertFalse(changed[0])
 
     def testSubscribeMixin(self):

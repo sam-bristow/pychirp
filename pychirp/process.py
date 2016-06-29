@@ -20,6 +20,9 @@ LOGGING_FORMAT                     = '%(asctime)s.%(msecs).03d %(levelname)s - %
 LOGGING_DATE_FORMAT                = '%d/%m/%Y %H:%M:%S'
 LOGGER_NAME                        = 'pychirp'
 
+_logger = _logging.getLogger(LOGGER_NAME)
+
+
 class ProcessInterface(object):
     instance = None
 
@@ -29,6 +32,8 @@ class ProcessInterface(object):
         self._parseCommandLineAndConfiguration(description)
         self._createTerminals()
         self._setupLogging()
+        self._operational = False
+        self._publishOperationalState()
 
     @property
     def connect_target(self):
@@ -58,6 +63,17 @@ class ProcessInterface(object):
     def leaf(self):
         return self._leaf
 
+    @property
+    def operational(self):
+        return self._operational
+
+    @operational.setter
+    def operational(self, boolean):
+        if boolean != self._operational:
+            self._operational = boolean
+            self._publishOperationalState()
+            _logger.info('ProcessInterface: Operational changed to {}'.format(boolean))
+
     def getConfigurationValue(self, location, default=None):
         sections = location.split('.')
         thing = self._configuration
@@ -76,6 +92,9 @@ class ProcessInterface(object):
     def start(self):
         self._createTcpClient()
 
+    def createTerminal(self, cls, name, signature_or_proto_module):
+        return cls(self._leaf, _posixpath.join(self._location, name), signature_or_proto_module)
+
     def _parseCommandLineAndConfiguration(self, description):
         parser = _argparse.ArgumentParser(description=description)
         parser.add_argument('-c, --connect', dest='chirp_connect', type=str, metavar='host:port',
@@ -86,7 +105,7 @@ class ProcessInterface(object):
                             help='Identification for CHIRP connections')
         parser.add_argument('-l, --location', dest='chirp_location', type=str, metavar='path',
                             help='Location of the terminals in the CHIRP terminal tree')
-        parser.add_argument('config_files', metavar='config.json', nargs='*',
+        parser.add_argument('config_files', metavar='config.json', nargs='+',
                             help='Configuration files in JSON format')
         args = parser.parse_args()
 
@@ -107,6 +126,11 @@ class ProcessInterface(object):
                     self._configuration.update(json_data)
                 print(' OK.')
         print('done.')
+
+        self._connect_target = None
+        self._timeout = None
+        self._location = None
+        self._identification = None
 
         if 'chirp' in self._configuration:
             config = self._configuration['chirp']
@@ -147,10 +171,10 @@ class ProcessInterface(object):
             host = self._connect_target.split(':')[0]
             port = int(self._connect_target.split(':')[1])
             self._tcp_client = _tcp.SimpleTcpClient(self._leaf, host, port, self._identification, self._timeout,
-                                                    self._logTcp)
+                self._logTcp)
 
     def _logTcp(self, message):
-        _logging.getLogger(LOGGER_NAME).info('CHIRP ' + message)
+        _logger.info('CHIRP ' + message)
 
     def _setupLogging(self):
         self._stdout_log_handler = _logging.StreamHandler(stream=_sys.stdout)
@@ -167,7 +191,12 @@ class ProcessInterface(object):
         self._root_logger.setLevel(_logging.DEBUG)
 
         for logger_name, level in self.getConfigurationValue('logging.logger_specific_level', {}).items():
-            _logging.getLogger(logger_name.upper()).setLevel(_logging.__dict__[level])
+            _logging.getLogger(logger_name).setLevel(_logging.__dict__[level.upper()])
+
+    def _publishOperationalState(self):
+        msg = self._operational_terminal.makeMessage()
+        msg.value = self._operational
+        self._operational_terminal.tryPublishMessage(msg)
 
 
 class _ChirpLogHandler(_logging.Handler):
@@ -192,12 +221,14 @@ class _ChirpLogHandler(_logging.Handler):
 
 
 class DependencyManager(object):
-    def __init__(self, leaf, operational_terminal_names, terminals):
+    def __init__(self, name, leaf, operational_terminal_names, terminals):
         self._lock = _threading.RLock()
+        self._name = name
         self._terminals = terminals
         self._operational_terminals = []
         self._on_readiness_changed = None
         self._ready = False
+        self._log_prefix = 'DependencyManager "{}": '.format(name)
 
         with self._lock:
             for name in operational_terminal_names:
@@ -211,9 +242,18 @@ class DependencyManager(object):
                 self._terminals.append(terminal)
 
             for terminal in self._terminals:
-                def fn(state):
-                    self._onBindingStateChanged(terminal, state)
-                terminal.on_binding_state_changed = fn
+                if getattr(terminal, 'on_binding_state_changed', None):
+                    def fn(state):
+                        self._onBindingStateChanged(terminal, state)
+                    terminal.on_binding_state_changed = fn
+                if getattr(terminal, 'on_subscription_state_changed', None):
+                    def fn(state):
+                        self._onSubscriptionStateChanged(terminal, state)
+                    terminal.on_subscription_state_changed = fn
+
+            for i, terminal in enumerate(self._terminals):
+                _logger.debug(self._log_prefix + 'Registered dependency {} of {} on {} "{}" with signature 0x{:x}' \
+                    .format(i+1, len(self._terminals), type(terminal).__name__, terminal.name, terminal.signature))
 
     @property
     def ready(self):
@@ -229,7 +269,12 @@ class DependencyManager(object):
 
     def _collectReadinessInformation(self):
         with self._lock:
-            established = [x.is_established for x in self._terminals]
+            established = []
+            for terminal in self._terminals:
+                binding_established = getattr(terminal, 'getBindingState', lambda: True)()
+                terminal_subscribed = getattr(terminal, 'getSubscriptionState', lambda: True)()
+                established.append(binding_established and terminal_subscribed)
+
             operational = []
             for terminal in self._operational_terminals:
                 operational.append(False)
@@ -247,18 +292,23 @@ class DependencyManager(object):
             if self._ready != ready:
                 self._ready = ready
                 if ready:
-                    _logging.getLogger(LOGGER_NAME).info('DependencyManager: Dependencies satisfied => READY')
+                    _logger.info(self._log_prefix + 'Dependencies satisfied => READY')
                 else:
-                    _logging.getLogger(LOGGER_NAME).warning('DependencyManager: Dependencies not satisfied any more')
+                    _logger.warning(self._log_prefix + 'Dependencies not satisfied any more')
                 if self._on_readiness_changed:
                     self._on_readiness_changed(ready)
 
     def _onOperationalMessageReceived(self, terminal, msg, cached):
-        _logging.getLogger(LOGGER_NAME).debug('DependencyManager: {} changed operational state to {}'.format(
+        _logger.debug(self._log_prefix + '{} changed operational state to {}'.format(
             terminal.name, 'True' if msg.value else 'False'))
         self._updateReadiness()
 
     def _onBindingStateChanged(self, terminal, state):
-        _logging.getLogger(LOGGER_NAME).debug('DependencyManager: {} changed binding state to {}'.format(
+        _logger.debug(self._log_prefix + '{} changed binding state to {}'.format(
             terminal.name, 'ESTABLISHED' if state else 'RELEASED'))
+        self._updateReadiness()
+
+    def _onSubscriptionStateChanged(self, terminal, state):
+        _logger.debug(self._log_prefix + '{} changed subscription state to {}'.format(
+            terminal.name, 'SUBSCRIBED' if state else 'UNSUBSCRIBED'))
         self._updateReadiness()

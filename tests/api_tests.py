@@ -241,6 +241,63 @@ class ApiTest(unittest.TestCase):
         self.assertTrue(self.async_err)
         self.assertIsNone(self.async_info)
 
+    def testSubscriptions(self):
+        scheduler = api.createScheduler()
+        leaf_a = api.createLeaf(scheduler)
+        leaf_b = api.createLeaf(scheduler)
+        api.createLocalConnection(leaf_a, leaf_b)
+
+        # create terminals on both leafs
+        terminal_a = api.createTerminal(leaf_a, api.TerminalTypes.PUBLISH_SUBSCRIBE, b'Terminal A', 123)
+        terminal_b = api.createTerminal(leaf_b, api.TerminalTypes.PUBLISH_SUBSCRIBE, b'Terminal B', 123)
+
+        # check the subscription state
+        self.assertFalse(api.getSubscriptionState(terminal_a))
+
+        # check the subscription state asynchronously
+        self.resetAsyncData()
+        api.asyncGetSubscriptionState(terminal_a, self.genericCompletionHandler)
+        time.sleep(0.1)
+
+        self.assertIsNotNone(self.async_err)
+        self.assertFalse(self.async_err)
+        self.assertFalse(self.async_info)
+
+        # create a binding and wait for the subscription state to change to subscribed
+        self.resetAsyncData()
+        api.asyncAwaitSubscriptionStateChange(terminal_a, self.genericCompletionHandler)
+        binding = api.createBinding(terminal_b, b'Terminal A')
+        time.sleep(0.1)
+
+        self.assertIsNotNone(self.async_err)
+        self.assertFalse(self.async_err)
+        self.assertTrue(self.async_info)
+
+        # check the subscription state
+        self.assertTrue(api.getSubscriptionState(terminal_a))
+
+        # destroy the binding and wait for the subscription state to change to unsubscribed
+        self.resetAsyncData()
+        api.asyncAwaitSubscriptionStateChange(terminal_a, self.genericCompletionHandler)
+        api.destroy(binding)
+        time.sleep(0.1)
+
+        self.assertIsNotNone(self.async_err)
+        self.assertFalse(self.async_err)
+        self.assertFalse(self.async_info)
+
+        # check the subscription state
+        self.assertFalse(api.getSubscriptionState(terminal_a))
+
+        # cancel waiting for the subscription state to change
+        self.resetAsyncData()
+        api.asyncAwaitSubscriptionStateChange(terminal_a, self.genericCompletionHandler)
+        api.cancelAwaitSubscriptionStateChange(terminal_a)
+        time.sleep(0.1)
+
+        self.assertTrue(self.async_err)
+        self.assertIsNone(self.async_info)
+
     def testPublishSubscribeTerminals(self):
         scheduler = api.createScheduler()
         leaf_a = api.createLeaf(scheduler)
