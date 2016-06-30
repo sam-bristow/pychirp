@@ -82,6 +82,7 @@ class TestStep(object):
                 idx -= 1
             info = traceback.extract_tb(exc_tb)[idx]
             _printError('File "{}", line {}'.format(info.filename, info.lineno))
+            sys.exit(1)
 
         sys.stdout.flush()
         return exc_type is Failure
@@ -152,7 +153,7 @@ class ProcessTestFixture(object):
         if terminals is None:
             terminals = self.getVisibleTerminals()
 
-        max_type_length = max([len(x['type'].__name__) for x in terminals])
+        max_type_length = max([0] + [len(x['type'].__name__) for x in terminals])
 
         lines = []
         lines.append('[')
@@ -165,6 +166,30 @@ class ProcessTestFixture(object):
     def printVisibleTerminals(self, terminals=None):
         for line in self.getVisibleTerminalsAsFormattedListOfStrings(terminals):
             print(line)
+
+    def assertEqual(self, actual, expected):
+        if actual != expected:
+            raise Failure('{} != {}'.format(actual, expected))
+
+    def assertNotEqual(self, actual, expected):
+        if actual == expected:
+            raise Failure('{} == {}'.format(actual, expected))
+
+    def assertIsNone(self, actual):
+        if actual is not None:
+            raise Failure('{} is not None'.format(actual))
+
+    def assertIsNotNone(self, actual):
+        if actual is None:
+            raise Failure('{} is None'.format(actual))
+
+    def assertTrue(self, actual):
+        if not actual:
+            raise Failure('bool({}) is False'.format(actual))
+
+    def assertFalse(self, actual):
+        if actual:
+            raise Failure('bool({}) is True'.format(actual))
 
     def checkVisibleTerminals(self, expected_terminals):
         process_terminals = [

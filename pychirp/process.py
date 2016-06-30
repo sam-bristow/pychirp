@@ -117,15 +117,15 @@ class ProcessInterface(object):
                 maxFileNameLength = max(maxFileNameLength, len(filename))
 
         self._configuration = {}
-        print('Reading {} configuration files:'.format(numConfigFiles))
+        # print('Reading {} configuration files:'.format(numConfigFiles))
         for pattern in args.config_files:
             for filename in _glob.glob(pattern):
-                print(('   {:' + str(maxFileNameLength + 3) + 's}').format(filename + '...'), end='')
+                # print(('   {:' + str(maxFileNameLength + 3) + 's}').format(filename + '...'), end='')
                 with open(filename) as file:
                     json_data = _json.load(file)
                     self._configuration.update(json_data)
-                print(' OK.')
-        print('done.')
+                # print(' OK.')
+        # print('done.')
 
         self._connect_target = None
         self._timeout = None
