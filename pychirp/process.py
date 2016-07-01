@@ -33,7 +33,9 @@ class ProcessInterface(object):
         self._createTerminals()
         self._setupLogging()
         self._operational = False
-        self._publishOperationalState()
+        self._operational_terminal.tryPublish(value=self._operational)
+        self._errors = set()
+        self._warnings = set()
 
     @property
     def connect_target(self):
@@ -71,7 +73,7 @@ class ProcessInterface(object):
     def operational(self, boolean):
         if boolean != self._operational:
             self._operational = boolean
-            self._publishOperationalState()
+            self._operational_terminal.tryPublish(value=self._operational)
             _logger.info('ProcessInterface: Operational changed to {}'.format(boolean))
 
     def getConfigurationValue(self, location, default=None):
@@ -94,6 +96,26 @@ class ProcessInterface(object):
 
     def createTerminal(self, cls, name, signature_or_proto_module):
         return cls(self._leaf, _posixpath.join(self._location, name), signature_or_proto_module)
+
+    def setError(self, description):
+        if description not in self._errors:
+            self._errors.add(description)
+            self._errors_terminal.tryPublish(value=list(self._errors))
+
+    def clearError(self, description):
+        if description in self._errors:
+            self._errors.remove(description)
+            self._errors_terminal.tryPublish(value=list(self._errors))
+
+    def setWarning(self, description):
+        if description not in self._warnings:
+            self._warnings.add(description)
+            self._warnings_terminal.tryPublish(value=list(self._warnings))
+
+    def clearWarning(self, description):
+        if description in self._warnings:
+            self._warnings.remove(description)
+            self._warnings_terminal.tryPublish(value=list(self._warnings))
 
     def _parseCommandLineAndConfiguration(self, description):
         parser = _argparse.ArgumentParser(description=description)
@@ -192,11 +214,6 @@ class ProcessInterface(object):
 
         for logger_name, level in self.getConfigurationValue('logging.logger_specific_level', {}).items():
             _logging.getLogger(logger_name).setLevel(_logging.__dict__[level.upper()])
-
-    def _publishOperationalState(self):
-        msg = self._operational_terminal.makeMessage()
-        msg.value = self._operational
-        self._operational_terminal.tryPublishMessage(msg)
 
 
 class _ChirpLogHandler(_logging.Handler):
