@@ -240,6 +240,23 @@ class ObjectOrientedApiTest(unittest.TestCase):
 
         self.assertEqual(terminal.proto_module, proto.chirp_0000c00c)
 
+    def testProtoPublishMixin(self):
+        scheduler = Scheduler()
+        leaf_a = Leaf(scheduler)
+        leaf_b = Leaf(scheduler)
+        connection = LocalConnection(leaf_a, leaf_b)
+        terminal_a = ProducerProtoTerminal(leaf_a, 'Voltage', proto.chirp_0000c00c)
+
+        self.assertFalse(terminal_a.tryPublish(value=444))
+
+        terminal_b = ConsumerProtoTerminal(leaf_b, 'Voltage', proto.chirp_0000c00c)
+        time.sleep(0.02)
+
+        terminal_a.publish(value=123.456)
+        time.sleep(0.02)
+
+        self.assertEqual(123.456, terminal_b.last_received_message.value)
+
     def testDeafMuteTerminals(self):
         scheduler = Scheduler()
         leaf_a = Leaf(scheduler)
