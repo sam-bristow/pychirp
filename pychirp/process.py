@@ -259,14 +259,23 @@ class DependencyManager(object):
                 self._terminals.append(terminal)
 
             for terminal in self._terminals:
-                if getattr(terminal, 'on_binding_state_changed', None):
+                try:
+                    _ = terminal.on_binding_state_changed
+
                     def fn(state):
                         self._onBindingStateChanged(terminal, state)
                     terminal.on_binding_state_changed = fn
-                if getattr(terminal, 'on_subscription_state_changed', None):
+                except:
+                    pass
+
+                try:
+                    _ = terminal.on_subscription_state_changed
+
                     def fn(state):
                         self._onSubscriptionStateChanged(terminal, state)
                     terminal.on_subscription_state_changed = fn
+                except:
+                    pass
 
             for i, terminal in enumerate(self._terminals):
                 _logger.debug(self._log_prefix + 'Registered dependency {} of {} on {} "{}" with signature 0x{:x}' \
