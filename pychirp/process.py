@@ -258,26 +258,9 @@ class DependencyManager(object):
                 self._operational_terminals.append(terminal)
                 self._terminals.append(terminal)
 
-            for terminal in self._terminals:
-                try:
-                    _ = terminal.on_binding_state_changed
-
-                    def fn(state):
-                        self._onBindingStateChanged(terminal, state)
-                    terminal.on_binding_state_changed = fn
-                except:
-                    pass
-
-                try:
-                    _ = terminal.on_subscription_state_changed
-
-                    def fn(state):
-                        self._onSubscriptionStateChanged(terminal, state)
-                    terminal.on_subscription_state_changed = fn
-                except:
-                    pass
-
             for i, terminal in enumerate(self._terminals):
+                self._monitorBindingAndSubscriptionStateChange(terminal)
+
                 _logger.debug(self._log_prefix + 'Registered dependency {} of {} on {} "{}" with signature 0x{:x}' \
                     .format(i+1, len(self._terminals), type(terminal).__name__, terminal.name, terminal.signature))
 
@@ -293,12 +276,36 @@ class DependencyManager(object):
     def on_readiness_changed(self, fn):
         self._on_readiness_changed = fn
 
+    def _monitorBindingAndSubscriptionStateChange(self, terminal):
+        try:
+            _ = terminal.on_binding_state_changed
+            terminal.on_binding_state_changed = lambda state: self._onBindingStateChanged(terminal, state)
+        except:
+            pass
+
+        try:
+            _ = terminal.on_subscription_state_changed
+            terminal.on_subscription_state_changed = lambda state: self._onSubscriptionStateChanged(terminal, state)
+        except:
+            pass
+
     def _collectReadinessInformation(self):
         with self._lock:
             established = []
             for terminal in self._terminals:
-                binding_established = getattr(terminal, 'getBindingState', lambda: True)()
-                terminal_subscribed = getattr(terminal, 'getSubscriptionState', lambda: True)()
+                binding_established = True
+                terminal_subscribed = True
+
+                try:
+                    binding_established = terminal.is_established
+                except:
+                    pass
+
+                try:
+                    terminal_subscribed = terminal.is_subscribed
+                except:
+                    pass
+
                 established.append(binding_established and terminal_subscribed)
 
             operational = []
