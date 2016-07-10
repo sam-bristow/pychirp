@@ -1,3 +1,4 @@
+from __future__ import print_function
 import subprocess
 import sys
 import time
@@ -14,8 +15,8 @@ from . import terminals as _terminals
 from . import tcp as _tcp
 
 
-def _print(text, *args, **kwargs):
-    print(_EscapeSequences.BLUE + 'TEST: ' + text + _EscapeSequences.RESET, *args, **kwargs)
+def _print(text, end='\n'):
+    print(_EscapeSequences.BLUE + 'TEST: ' + text + _EscapeSequences.RESET, end=end)
     sys.stdout.flush()
 
 

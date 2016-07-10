@@ -248,12 +248,18 @@ def _custom_call(shared_lib_fn, argtypes):
     return decorator
 
 
+_library_filename = None
 if platform.system() == 'Windows':
-    _chirp = cdll.LoadLibrary("chirp.dll")
+    _library_filename = "chirp.dll"
 elif platform.system() == 'Linux':
-    _chirp = cdll.LoadLibrary("libchirp.so")
+    _library_filename = "libchirp.so"
 else:
     raise Exception(platform.system() + ' is not supported yet')
+
+try:
+    _chirp = cdll.LoadLibrary(_library_filename)
+except Exception as e:
+    raise Exception('ERROR: Could not load {}: {}. Make sure the library is in your library search path.'.format(_library_filename, e))
 
 
 class _CallbackFunction(object):
