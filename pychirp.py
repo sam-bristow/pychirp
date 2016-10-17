@@ -50,6 +50,18 @@ class Result(object):
         return '[{}] {}'.format(self._value, s)
 
 
+class Error(Exception, Result):
+    def __init__(self, value: int):
+        assert value < 0
+        Result.__init__(self, value)
+
+
+class Success(Result):
+    def __init__(self, value: int = 0):
+        assert value >= 0
+        Result.__init__(self, value)
+
+
 # ======================================================================================================================
 # Free functions
 # ======================================================================================================================
