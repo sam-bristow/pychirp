@@ -1,6 +1,7 @@
 import ctypes as _ctypes
 import platform as _platform
 import enum as _enum
+import atexit as _atexit
 
 
 # ======================================================================================================================
@@ -28,7 +29,7 @@ _chirp.CHIRP_GetErrorString.restype = _ctypes.c_char_p
 _chirp.CHIRP_GetErrorString.argtypes = [_ctypes.c_int]
 
 
-class Result(object):
+class Result:
     def __init__(self, value: int):
         self._value = value
 
@@ -62,6 +63,29 @@ class Success(Result):
         Result.__init__(self, value)
 
 
+def _api_result_handler(result: int) -> Success:
+    if result < 0:
+        raise Error(result)
+    else:
+        return Success(result)
+
+
+# ======================================================================================================================
+# Initialise the library and clean up on exit
+# ======================================================================================================================
+_chirp.CHIRP_Initialise.restype = Result
+_chirp.CHIRP_Initialise.argtypes = []
+
+_res = _chirp.CHIRP_Initialise()
+if not _res:
+    raise Exception('ERROR: Could not initialise CHIRP: {}'.format(_res))
+
+
+_chirp.CHIRP_Shutdown.restype = Result
+_chirp.CHIRP_Shutdown.argtypes = []
+_atexit.register(_chirp.CHIRP_Shutdown)
+
+
 # ======================================================================================================================
 # Free functions
 # ======================================================================================================================
@@ -82,9 +106,49 @@ def get_version() -> str:
     return _chirp.CHIRP_GetVersion().decode()
 
 
-_chirp.CHIRP_SetLogFile.restype = Result
+_chirp.CHIRP_SetLogFile.restype = _api_result_handler
 _chirp.CHIRP_SetLogFile.argtypes = [_ctypes.c_char_p, _ctypes.c_int]
 
 
-def set_log_file(filename: str, verbosity: Verbosity) -> Result:
-    return _chirp.CHIRP_SetLogFile(filename.encode('utf-8'), verbosity.value)
+def set_log_file(filename: str, verbosity: Verbosity) -> None:
+    _chirp.CHIRP_SetLogFile(filename.encode('utf-8'), verbosity.value)
+
+
+# ======================================================================================================================
+# Object class
+# ======================================================================================================================
+_chirp.CHIRP_Destroy.restype = _api_result_handler
+_chirp.CHIRP_Destroy.argtypes = [_ctypes.c_void_p]
+
+
+class Object:
+    def __init__(self, handle: _ctypes.c_void_p):
+        self._handle = handle
+
+    def destroy(self) -> None:
+        _chirp.CHIRP_Destroy(self._handle)
+        self._handle = None
+
+    def __str__(self):
+        handleStr = '{:#010x}'.format(self._handle.value) if self._handle.value else 'INVALID'
+        return '{} [{}]'.format(self.__class__.__name__, handleStr)
+
+
+# ======================================================================================================================
+# Scheduler
+# ======================================================================================================================
+_chirp.CHIRP_CreateScheduler.restype = _api_result_handler
+_chirp.CHIRP_CreateScheduler.argtypes = [_ctypes.POINTER(_ctypes.c_void_p)]
+
+_chirp.CHIRP_SetSchedulerThreadPoolSize.restype = _api_result_handler
+_chirp.CHIRP_SetSchedulerThreadPoolSize.argtypes = [_ctypes.c_void_p, _ctypes.c_uint]
+
+
+class Scheduler(Object):
+    def __init__(self):
+        handle = _ctypes.c_void_p()
+        _chirp.CHIRP_CreateScheduler(_ctypes.byref(handle))
+        Object.__init__(self, handle)
+
+    def set_thread_pool_size(self, n: int) -> None:
+        _chirp.CHIRP_SetSchedulerThreadPoolSize(self._handle, n)
