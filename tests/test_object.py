@@ -10,11 +10,11 @@ class TestObject(unittest.TestCase):
 
     def test_destroy(self):
         obj = pychirp.Object(ctypes.c_void_p())
-        self.assertRaises(Exception, lambda: obj.destroy())
+        self.assertRaises(pychirp.Error, lambda: obj.destroy())
 
         scheduler = pychirp.Scheduler()
         scheduler.destroy()
-        self.assertRaises(Exception, lambda: scheduler.destroy())
+        self.assertRaises(pychirp.Error, lambda: scheduler.destroy())
 
     def test_str(self):
         obj = pychirp.Object(ctypes.c_void_p())

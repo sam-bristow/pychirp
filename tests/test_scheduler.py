@@ -8,7 +8,7 @@ class TestScheduler(unittest.TestCase):
 
     def test_set_thread_pool_size(self):
         self.scheduler.set_thread_pool_size(2)
-        self.assertRaises(Exception, lambda: self.scheduler.set_thread_pool_size(1000000))
+        self.assertRaises(pychirp.Error, lambda: self.scheduler.set_thread_pool_size(1000000))
 
 
 if __name__ == '__main__':
