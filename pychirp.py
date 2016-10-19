@@ -58,6 +58,16 @@ class Error(Exception, Result):
         Result.__init__(self, value)
 
 
+class Canceled(Error):
+    def __init__(self):
+        Error.__init__(self, -12)
+
+
+class Timeout(Error):
+    def __init__(self):
+        Error.__init__(self, -27)
+
+
 class Success(Result):
     def __init__(self, value: int = 0):
         assert value >= 0
