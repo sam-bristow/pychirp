@@ -10,6 +10,7 @@ class TestFreeFunctions(unittest.TestCase):
 
     def test_set_log_file(self):
         filename = tempfile.mktemp(suffix='.log', prefix='chirp-')
+        print(filename)
         pychirp.set_log_file(filename=filename, verbosity=pychirp.Verbosity.DEBUG)
         self.assertTrue(os.path.isfile(filename))
         self.assertGreater(os.path.getsize(filename), 10)

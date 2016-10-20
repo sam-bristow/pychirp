@@ -28,15 +28,15 @@ class TestResult(unittest.TestCase):
         self.assertEqual('[-2] Invalid object handle', str(self.errorResult))
 
 
-class TestError(unittest.TestCase):
+class TestFailure(unittest.TestCase):
     def test_init(self):
-        self.assertRaises(Exception, lambda: pychirp.Error(0))
-        self.assertRaises(Exception, lambda: pychirp.Error(1))
-        res = pychirp.Error(-1)
+        self.assertRaises(Exception, lambda: pychirp.Failure(0))
+        self.assertRaises(Exception, lambda: pychirp.Failure(1))
+        res = pychirp.Failure(-1)
 
     def test_comparison(self):
-        self.assertNotEqual(pychirp.Error(-1), pychirp.Result(1))
-        self.assertEqual(pychirp.Error(-1), pychirp.Result(-1))
+        self.assertNotEqual(pychirp.Failure(-1), pychirp.Result(1))
+        self.assertEqual(pychirp.Failure(-1), pychirp.Result(-1))
 
 
 class TestSuccess(unittest.TestCase):
