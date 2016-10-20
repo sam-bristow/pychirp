@@ -3,6 +3,7 @@ import platform as _platform
 import enum as _enum
 import atexit as _atexit
 import typing as _typing
+import threading as _threading
 
 
 # ======================================================================================================================
@@ -183,7 +184,7 @@ class Object:
     def __del__(self):
         if self._handle is not None:
             try:
-                _chirp.CHIRP_Destroy(self._handle)
+                self.destroy()
             except Error:
                 pass
 
@@ -330,7 +331,7 @@ class Connection(Object):
         return _ctypes.string_at(_ctypes.addressof(buffer)).decode()
 
     @property
-    def remote_identification(self) -> _typing.Union[str, None]:
+    def remote_identification(self) -> _typing.Optional[str]:
         buffer = _ctypes.create_string_buffer(self.STRING_BUFFER_SIZE)
         bytes_written = _ctypes.c_uint()
         _chirp.CHIRP_GetRemoteIdentification(self._handle, buffer, _ctypes.sizeof(buffer), _ctypes.byref(bytes_written))
@@ -351,7 +352,7 @@ class NonLocalConnection(Connection):
     def __init__(self, handle: _ctypes.c_void_p):
         Connection.__init__(self, handle)
 
-    def assign(self, endpoint: Endpoint, timeout: _typing.Union[float, None] = None) -> None:
+    def assign(self, endpoint: Endpoint, timeout: _typing.Optional[float] = None) -> None:
         _chirp.CHIRP_AssignConnection(self._handle, endpoint._handle, _make_api_timeout(timeout))
 
     def async_await_death(self, completion_handler: _typing.Callable[[Error], None]) -> None:
@@ -384,7 +385,7 @@ _chirp.CHIRP_CancelTcpConnect.argtypes = [_ctypes.c_void_p]
 
 
 class TcpClient(Object):
-    def __init__(self, scheduler: Scheduler, identification: _typing.Union[str, None] = None):
+    def __init__(self, scheduler: Scheduler, identification: _typing.Optional[str] = None):
         handle = _ctypes.c_void_p()
         if identification is None:
             _chirp.CHIRP_CreateTcpClient(_ctypes.byref(handle), scheduler._handle, _ctypes.c_void_p(), 0)
@@ -400,11 +401,11 @@ class TcpClient(Object):
         return self._scheduler
 
     @property
-    def identification(self) -> _typing.Union[str, None]:
+    def identification(self) -> _typing.Optional[str]:
         return self._identification
 
-    def async_connect(self, host: str, port: int, handshake_timeout: float,
-                      completion_handler: _typing.Callable[[Result, _typing.Union[TcpConnection, None]], None]) -> None:
+    def async_connect(self, host: str, port: int, handshake_timeout: _typing.Optional[float],
+                      completion_handler: _typing.Callable[[Result, _typing.Optional[TcpConnection]], None]) -> None:
         def fn(res, connection_handle):
             connection = None
             if res:
@@ -432,7 +433,7 @@ _chirp.CHIRP_CancelTcpAccept.argtypes = [_ctypes.c_void_p]
 
 
 class TcpServer(Object):
-    def __init__(self, scheduler: Scheduler, address: str, port: int, identification: _typing.Union[str, None] = None):
+    def __init__(self, scheduler: Scheduler, address: str, port: int, identification: _typing.Optional[str] = None):
         handle = _ctypes.c_void_p()
         if identification is None:
             _chirp.CHIRP_CreateTcpServer(_ctypes.byref(handle), scheduler._handle, address.encode('utf-8'), port,
@@ -461,11 +462,11 @@ class TcpServer(Object):
         return self._port
 
     @property
-    def identification(self) -> _typing.Union[str, None]:
+    def identification(self) -> _typing.Optional[str]:
         return self._identification
 
-    def async_accept(self, handshake_timeout: float,
-                      completion_handler: _typing.Callable[[Result, _typing.Union[TcpConnection, None]], None]) -> None:
+    def async_accept(self, handshake_timeout: _typing.Optional[float],
+                      completion_handler: _typing.Callable[[Result, _typing.Optional[TcpConnection]], None]) -> None:
         def fn(res, connection_handle):
             connection = None
             if res:
@@ -477,3 +478,168 @@ class TcpServer(Object):
 
     def cancel_accept(self) -> None:
         _chirp.CHIRP_CancelTcpAccept(self._handle)
+
+
+class AutoConnectingTcpClient:
+    def __init__(self, endpoint: Endpoint, host: str, port: int, timeout: _typing.Optional[float] = None,
+                 identification: _typing.Optional[str] = None):
+        # TODO: Allow ProcessInterface and Configuration as ctor parameters
+        self._endpoint = endpoint
+        self._host = host
+        self._port = port
+        self._timeout = timeout
+        self._identification = identification
+        self._connect_observer = None
+        self._disconnect_observer = None
+        self._client = TcpClient(endpoint.scheduler, identification)
+        self._reconnectThread = _threading.Thread(target=self._reconnect_thread_fn)
+        self._running = False
+        self._cv = _threading.Condition()
+        self._connection = None
+
+    @property
+    def endpoint(self) -> Endpoint:
+        return self._endpoint
+
+    @property
+    def host(self) -> str:
+        return self._host
+
+    @property
+    def port(self) -> int:
+        return self._port
+
+    @property
+    def timeout(self) -> _typing.Optional[float]:
+        return self._timeout
+
+    @property
+    def identification(self) -> _typing.Optional[str]:
+        return self._identification
+
+    @property
+    def connect_observer(self) -> _typing.Callable[[Result, _typing.Optional[TcpConnection]], None]:
+        with self._cv:
+            return self._connect_observer
+
+    @connect_observer.setter
+    def connect_observer(self, fn: _typing.Callable[[Result, _typing.Optional[TcpConnection]], None]):
+        with self._cv:
+            self._connect_observer = fn
+
+    @property
+    def disconnect_observer(self) -> _typing.Callable[[Error], None]:
+        with self._cv:
+            return self._disconnect_observer
+
+    @disconnect_observer.setter
+    def disconnect_observer(self, fn: _typing.Callable[[Error], None]):
+        with self._cv:
+            self._disconnect_observer = fn
+
+    def _reconnect_thread_fn(self):
+        while True:
+            with self._cv:
+                self._cv.wait()
+                if not self._running:
+                    return
+
+                self._connection.destroy()
+                self._connection = None
+
+                self._cv.wait(timeout=1.0)
+                if not self._running:
+                    return
+
+                self._start_connect()
+
+    def _start_connect(self):
+        # TODO: logging
+        self._client.async_connect(self._host, self._port, self._timeout, self._on_connect_completed)
+
+    def _on_connect_completed(self, res, connection):
+        if res == Canceled():
+            return
+
+        with self._cv:
+            if not self._running:
+                return
+
+            if res == Success():
+                try:
+                    connection.assign(self._endpoint, self._timeout)
+                    connection.async_await_death(self._on_connection_died)
+                    self._connection = connection
+
+                    # TODO: Logging
+
+                    if self._connect_observer:
+                        self._connect_observer(res, connection)
+
+                    return
+                except Error as err:
+                    res = err
+                    connection.destroy()
+
+            # TODO: Logging
+
+            if self._connect_observer:
+                self._connect_observer(res, None)
+
+            self._cv.notify()
+
+    def _on_connection_died(self, err):
+        if err == Canceled():
+            return
+
+        with self._cv:
+            if not self._running:
+                return
+
+            # TODO: Logging
+
+            if self._disconnect_observer:
+                self._disconnect_observer(err)
+
+            self._cv.notify()
+
+    def start(self):
+        with self._cv:
+            if self._running:
+                raise Exception('Already started')
+            if not self._host or not self._port or self._port > 65535:
+                raise Exception('Invalid target')
+
+            self._start_connect()
+            self._running = True
+
+    def try_start(self) -> bool:
+        try:
+            self.start()
+            return True
+        except Error:
+            return False
+
+    def destroy(self) -> None:
+        with self._cv:
+            self._running = False
+            self._cv.notify()
+
+        if self._reconnectThread.isAlive():
+            self._reconnectThread.join()
+
+        self._client.destroy()
+        self._client = None
+
+    def __del__(self):
+        if self._client is not None:
+            try:
+                self.destroy()
+            except Error:
+                pass
+
+    def __str__(self):
+        if self.host and self.port:
+            return '{} connecting to {}:{}'.format(self.__class__.__name__, self.host, self.port)
+        else:
+            return '{} (disabled)'.format(self.__class__.__name__)
