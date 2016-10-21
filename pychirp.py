@@ -188,7 +188,11 @@ class Object:
         if self._handle is not None:
             try:
                 self.destroy()
+<<<<<<< HEAD
             except Failure:
+=======
+            except Error:
+>>>>>>> 61afffd9e6b0eb5f04084400a7f7c11ba808f835
                 pass
 
     def __str__(self):
@@ -562,6 +566,7 @@ class AutoConnectingTcpClient:
                 self._cv.wait(timeout=1.0)
                 if not self._running:
                     return
+
                 self._start_connect()
 
     def _start_connect(self):
@@ -645,7 +650,7 @@ class AutoConnectingTcpClient:
         if self._connection:
             self._connection.destroy()
             self._connection = None
-
+            
     def __del__(self):
         if self._client is not None:
             try:
