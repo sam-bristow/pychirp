@@ -1,0 +1,20 @@
+{
+    "chirp": {
+        "location": "/Test",
+        "connection": {
+            "target": "localhost:12345",
+            "timeout": 1.234,
+            "identification": "Hello World"
+        }
+    },
+    "array": [
+        123,
+        456
+    ],
+    "empty-array": [
+    ],
+    "object-array": [
+        { "a": 88 },
+        { "a": 33 }
+    ]
+}

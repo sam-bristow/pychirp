@@ -1,0 +1,10 @@
+{
+    "chirp": {
+        "location": "/Test",
+        "connection": {
+            "target": "localhost:12345",
+            "timeout": 1.234,
+            "identification": "Hello World", /* <-- the semicolon here causes an error when parsing */
+        }
+    }
+}

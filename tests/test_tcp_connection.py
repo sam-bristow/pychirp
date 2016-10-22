@@ -206,23 +206,16 @@ class TestAutoConnectingTcpClient(unittest.TestCase):
         self.server = pychirp.TcpServer(self.scheduler, self.ADDRESS, self.PORT, self.identification)
 
         def accept_handler(res, connection):
-            print('cool', res)
             self.assertTrue(res)
             self.server_connection = connection
             connection.assign(self.endpointB, self.timeout)
 
         self.server.async_accept(self.timeout, accept_handler)
         while self.server_connection is None:
-            print('Waiting 2')
-            import time
-            time.sleep(1)
             pass
 
         # wait until the client establishes the connection
         while not self.connect_handler_res:
-            print('Waiting 3')
-            import time
-            time.sleep(1)
             pass
         self.assertIsNotNone(self.connect_handler_connection)
 
@@ -233,9 +226,6 @@ class TestAutoConnectingTcpClient(unittest.TestCase):
         self.assertIsNone(self.disconnect_handler_res)
         self.server_connection.destroy()
         while self.disconnect_handler_res is None:
-            print('Waiting 4')
-            import time
-            time.sleep(1)
             pass
 
         self.assertFalse(self.disconnect_handler_res)

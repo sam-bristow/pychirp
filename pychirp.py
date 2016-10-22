@@ -4,6 +4,11 @@ import enum as _enum
 import atexit as _atexit
 import typing as _typing
 import threading as _threading
+import argparse as _argparse
+import glob as _glob
+import json as _json
+import sys as _sys
+import posixpath as _posixpath
 
 
 # ======================================================================================================================
@@ -170,6 +175,174 @@ def set_log_file(filename: str, verbosity: Verbosity) -> None:
 
 
 # ======================================================================================================================
+# Path
+# ======================================================================================================================
+class BadPath(Exception):
+    def __init__(self, path: str):
+        self._path = path
+
+    def __str__(self):
+        return 'Invalid path: \'{}\''.format(self._path)
+
+
+class Path:
+    def __init__(self, path: _typing.Optional[str] = None):
+        self._path = path if path else ''
+        if '//' in self._path:
+            raise BadPath(self._path)
+
+    def __str__(self):
+        return self._path
+
+    def __len__(self):
+        return len(self._path)
+
+    def __eq__(self, other):
+        return self._path == str(other)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __truediv__(self, other):
+        if Path(str(other)).is_absolute:
+            raise BadPath(str(other))
+        return Path(_posixpath.join(self._path, str(other)))
+
+    def clear(self) -> None:
+        self._path = ''
+
+    @property
+    def is_absolute(self) -> bool:
+        return not len(self._path) == 0 and self._path[0] == '/'
+
+    @property
+    def is_root(self) -> bool:
+        return self._path == '/'
+
+
+# ======================================================================================================================
+# Configuration
+# ======================================================================================================================
+class BadCommandLine(Exception):
+    def __init__(self, description: str):
+        self._description = description
+
+    def __str__(self):
+        return 'Cannot parse command line: {}'.format(self._description)
+
+
+class BadConfiguration(Exception):
+    def __init__(self, description: str):
+        self._description = description
+
+    def __str__(self):
+        return 'Cannot parse configuration: {}'.format(self._description)
+
+
+class Configuration:
+    def __init__(self, argv: _typing.Optional[_typing.List[str]] = _sys.argv):
+        self._config = {}
+        self.update('''
+        {
+            "chirp": {
+                "location": null,
+                "connection": {
+                    "target": null,
+                    "timeout": null,
+                    "identification": null
+                }
+            }
+        }
+        ''')
+
+        if argv:
+            self._parse_cmdline(argv)
+
+    def __str__(self):
+        return str(self._config)
+
+    @property
+    def config(self) -> _typing.DefaultDict:
+        return self._config
+
+    @property
+    def location(self) -> Path:
+        return Path(self._config['chirp']['location'])
+
+    @property
+    def connection_target(self) -> _typing.Optional[str]:
+        return self._config['chirp']['connection']['target']
+
+    @property
+    def connection_timeout(self) -> _typing.Optional[float]:
+        return self._config['chirp']['connection']['timeout']
+
+    @property
+    def connection_identification(self) -> _typing.Optional[str]:
+        return self._config['chirp']['connection']['identification']
+
+    def update(self, json: str) -> None:
+        try:
+            def merge(a, b, path=None):
+                if path is None:
+                    path = []
+                for key in b:
+                    if key in a:
+                        if isinstance(a[key], dict) and isinstance(b[key], dict):
+                            merge(a[key], b[key], path + [str(key)])
+                        else:
+                            a[key] = b[key]
+                    else:
+                        a[key] = b[key]
+                return a
+
+            self._config = merge(self._config, _json.loads(json))
+        except Exception as e:
+            raise BadConfiguration(str(e))
+
+    def _parse_cmdline(self, argv):
+        class ThrowingArgumentParser(_argparse.ArgumentParser):
+            def __init__(self):
+                super(ThrowingArgumentParser, self).__init__()
+
+            def error(self, message):
+                raise BadCommandLine(message)
+
+        parser = ThrowingArgumentParser()
+        parser.add_argument('--connection_target', '-c', dest='target', type=str, metavar='host:port',
+                            help='CHIRP server to connect to (e.g. "hostname:12000")')
+        parser.add_argument('--connection_timeout', '-t', dest='timeout', type=float, metavar='seconds',
+                            help='Connection timeout in seconds (-1 for infinity)')
+        parser.add_argument('--connection_identification', '-i', dest='identification', type=str, metavar='string',
+                            help='Identification for CHIRP connections')
+        parser.add_argument('--location', '-l', dest='location', type=str, metavar='path',
+                            help='Location of the terminals for this process in the CHIRP terminal tree')
+        parser.add_argument('--json', '-j', dest='json_overrides', type=str, metavar='JSON', action='append',
+                            help='Configuration overrides (in JSON format, e.g. \'{ "my-age": 42 }\')')
+        parser.add_argument('config_files', metavar='config.json', nargs='+',
+                            help='Configuration files in JSON format')
+        pargs = parser.parse_args(argv)
+
+        for pattern in pargs.config_files:
+            for filename in _glob.glob(pattern):
+                with open(filename, 'r') as file:
+                    self.update(file.read())
+
+        if pargs.json_overrides:
+            for json_str in pargs.json_overrides:
+                self.update(json_str)
+
+        if pargs.location:
+            self.update('{"chirp": {"location": "' + pargs.location + '"}}')
+        if pargs.target:
+            self.update('{"chirp": {"connection": {"target": "' + pargs.target + '"}}}')
+        if pargs.timeout:
+            self.update('{"chirp": {"connection": {"timeout": ' + str(pargs.timeout) + '}}}')
+        if pargs.identification:
+            self.update('{"chirp": {"connection": {"identification": "' + pargs.identification + '"}}}')
+
+
+# ======================================================================================================================
 # Object
 # ======================================================================================================================
 _chirp.CHIRP_Destroy.restype = _api_result_handler
@@ -188,11 +361,7 @@ class Object:
         if self._handle is not None:
             try:
                 self.destroy()
-<<<<<<< HEAD
             except Failure:
-=======
-            except Error:
->>>>>>> 61afffd9e6b0eb5f04084400a7f7c11ba808f835
                 pass
 
     def __str__(self):

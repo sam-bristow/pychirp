@@ -1,0 +1,10 @@
+{
+	"chirp": {
+		"location": "/Pudding",
+		"connection": {
+			"target": null,
+			"timeout": null,
+			"identification": null
+		}
+	}
+}
