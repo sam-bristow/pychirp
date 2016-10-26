@@ -511,12 +511,10 @@ class Logger:
         if _platform.system() == 'Windows':
             _ctypes.windll.kernel32.SetConsoleTextAttribute(cls._win32_stdout_handle, cls._win32_original_colours)
         else:
-            print('\033[0m')
+            print('\033[0m', end='')
 
     @classmethod
     def _set_colour(cls, severity):
-        print(_sys.stdout.isatty())
-        print('asdfadsfasdf')
         if not cls.colourised_stdout or not _sys.stdout.isatty():
             return
 
@@ -539,7 +537,7 @@ class Logger:
                 Verbosity.ERROR:   '\033[01;31m',
                 Verbosity.FATAL:   '\033[41m\033[01;37m'
             }[severity]
-            print(seq)
+            print(seq, end='')
 
     def __init__(self, component: _typing.Optional[str] = None):
         self._component = component if component else 'app'
