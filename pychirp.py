@@ -9,6 +9,7 @@ import glob as _glob
 import json as _json
 import sys as _sys
 import posixpath as _posixpath
+import time as _time
 
 
 # ======================================================================================================================
@@ -144,6 +145,35 @@ def _make_api_timeout(timeout):
         return -1
     else:
         return int(timeout * 1000)
+
+
+class _ClassProperty:
+    def __init__(self, getter, setter=None):
+        self._getter = getter
+        self._setter = setter
+
+    def __get__(self, instance, cls=None):
+        if cls is None:
+            cls = type(instance)
+        return self._getter.__get__(instance, cls)()
+
+    def __set__(self, instance, value):
+        if not self._setter:
+            raise AttributeError("can't set attribute")
+        cls = type(instance)
+        return self._setter.__get__(instance, cls)(value)
+
+    def setter(self, setter):
+        if not isinstance(setter, (classmethod, staticmethod)):
+            setter = classmethod(setter)
+        self._setter = setter
+        return self
+
+
+def _classproperty(getter):
+    if not isinstance(getter, (classmethod, staticmethod)):
+        getter = classmethod(getter)
+    return _ClassProperty(getter)
 
 
 # ======================================================================================================================
@@ -303,7 +333,7 @@ class Configuration:
     def _parse_cmdline(self, argv):
         class ThrowingArgumentParser(_argparse.ArgumentParser):
             def __init__(self):
-                super(ThrowingArgumentParser, self).__init__()
+                _argparse.ArgumentParser.__init__(self)
 
             def error(self, message):
                 raise BadCommandLine(message)
@@ -340,6 +370,300 @@ class Configuration:
             self.update('{"chirp": {"connection": {"timeout": ' + str(pargs.timeout) + '}}}')
         if pargs.identification:
             self.update('{"chirp": {"connection": {"identification": "' + pargs.identification + '"}}}')
+
+
+# ======================================================================================================================
+# Timestamp
+# ======================================================================================================================
+class Timestamp:
+    class Precision(_enum.Enum):
+        SECONDS = 0
+        MILLISECONDS = 1
+        MICROSECONDS = 2
+        NANOSECONDS = 3
+
+    def __init__(self):
+        self._time = _time.time()
+        self._ns_since_epoch = int(self._time * 1e9)
+
+    @property
+    def ns_since_epoch(self) -> int:
+        return self._ns_since_epoch
+
+    @property
+    def milliseconds(self):
+        return int(self._ns_since_epoch / 1000000) % 1000
+
+    @property
+    def microseconds(self):
+        return int(self._ns_since_epoch / 1000) % 1000
+
+    @property
+    def nanoseconds(self):
+        return self._ns_since_epoch % 1000
+
+    def to_string(self, precision: Precision = Precision.MILLISECONDS):
+        s = _time.strftime('%d/%m/%Y %T', _time.localtime(int(self._time)))
+
+        if precision.value >= self.Precision.MILLISECONDS.value:
+            s += '.{:03}'.format(self.milliseconds)
+        if precision.value >= self.Precision.MICROSECONDS.value:
+            s += '.{:03}'.format(self.microseconds)
+        if precision.value >= self.Precision.NANOSECONDS.value:
+            s += '.{:03}'.format(self.nanoseconds)
+
+        return s
+
+    def __str__(self):
+        return self.to_string()
+
+
+# ======================================================================================================================
+# Logging
+# ======================================================================================================================
+class _Verbosities:
+    def __init__(self):
+        self.stdout = Verbosity.TRACE
+        self.chirp = Verbosity.TRACE
+
+
+if _platform.system() == 'Windows':
+    class _Coord(_ctypes.Structure):
+        _fields_ = [
+            ("X", _ctypes.c_short),
+            ("Y", _ctypes.c_short)
+        ]
+
+
+    class _SmallRect(_ctypes.Structure):
+        _fields_ = [
+            ("Left", _ctypes.c_short),
+            ("Top", _ctypes.c_short),
+            ("Right", _ctypes.c_short),
+            ("Bottom", _ctypes.c_short)
+        ]
+
+
+    class _ConsoleScreenBufferInfo(_ctypes.Structure):
+        _fields_ = [
+            ("dwSize", _Coord),
+            ("dwCursorPosition", _Coord),
+            ("wAttributes", _ctypes.c_ushort),
+            ("srWindow", _SmallRect),
+            ("dwMaximumWindowSize", _SmallRect)
+        ]
+
+
+class Logger:
+    _colourised_stdout = False
+    _max_verbosities = _Verbosities()
+    _logger_verbosities = {}
+    _app_logger = None
+    _chirp_logger = None
+    _lock = _threading.Lock()
+
+    if _platform.system() == 'Windows':
+        _STD_OUTPUT_HANDLE = -11
+        _win32_stdout_handle = _ctypes.windll.kernel32.GetStdHandle(_STD_OUTPUT_HANDLE)
+        _win32_original_csbi = _ConsoleScreenBufferInfo()
+        _ctypes.windll.kernel32.GetConsoleScreenBufferInfo(_win32_stdout_handle, _ctypes.byref(_win32_original_csbi))
+        _win32_original_colours = _win32_original_csbi.wAttributes
+
+    @_classproperty
+    def colourised_stdout(cls) -> bool:
+        return cls._colourised_stdout
+
+    @colourised_stdout.setter
+    def colourised_stdout(cls, enabled: bool):
+        cls._colourised_stdout = enabled
+        # TODO: notify ProcessInterface to update terminal
+
+    @_classproperty
+    def max_stdout_verbosity(cls) -> Verbosity:
+        return cls._max_verbosities.stdout
+
+    @max_stdout_verbosity.setter
+    def max_stdout_verbosity(cls, verbosity: Verbosity):
+        cls._max_verbosities.stdout = verbosity
+        # TODO: notify ProcessInterface to update terminal
+
+    @_classproperty
+    def max_chirp_verbosity(cls) -> Verbosity:
+        return cls._max_verbosities.chirp
+
+    @max_chirp_verbosity.setter
+    def max_chirp_verbosity(cls, verbosity: Verbosity):
+        cls._max_verbosities.chirp = verbosity
+
+    @_classproperty
+    def app_logger(cls):
+        return cls._app_logger
+
+    @_classproperty
+    def chirp_logger(cls):
+        return cls._chirp_logger
+
+    @classmethod
+    def _reset_colours(cls):
+        if not cls.colourised_stdout or not _sys.stdout.isatty():
+            return
+
+        if _platform.system() == 'Windows':
+            _ctypes.windll.kernel32.SetConsoleTextAttribute(cls._win32_stdout_handle, cls._win32_original_colours)
+        else:
+            print('\033[0m')
+
+    @classmethod
+    def _set_colour(cls, severity):
+        print(_sys.stdout.isatty())
+        print('asdfadsfasdf')
+        if not cls.colourised_stdout or not _sys.stdout.isatty():
+            return
+
+        if _platform.system() == 'Windows':
+            colour = {
+                Verbosity.TRACE:   6,
+                Verbosity.DEBUG:   10,
+                Verbosity.INFO:    15,
+                Verbosity.WARNING: 14,
+                Verbosity.ERROR:   12,
+                Verbosity.FATAL:   15 | 64
+            }[severity]
+            _ctypes.windll.kernel32.SetConsoleTextAttribute(cls._win32_stdout_handle, colour)
+        else:
+            seq = {
+                Verbosity.TRACE:   '\033[22;33m',
+                Verbosity.DEBUG:   '\033[01;32m',
+                Verbosity.INFO:    '\033[01;37m',
+                Verbosity.WARNING: '\033[01;33m',
+                Verbosity.ERROR:   '\033[01;31m',
+                Verbosity.FATAL:   '\033[41m\033[01;37m'
+            }[severity]
+            print(seq)
+
+    def __init__(self, component: _typing.Optional[str] = None):
+        self._component = component if component else 'app'
+        if self._component not in self._logger_verbosities:
+            self._verbosities = _Verbosities()
+            self._logger_verbosities[self._component] = self._verbosities
+        else:
+            self._verbosities = self._logger_verbosities[self._component]
+
+    @property
+    def component(self) -> str:
+        return self._component
+
+    @property
+    def stdout_verbosity(self) -> Verbosity:
+        return self._verbosities.stdout
+
+    @stdout_verbosity.setter
+    def stdout_verbosity(self, verbosity: Verbosity):
+        self._verbosities.stdout = verbosity
+        # TODO: notify ProcessInterface to update terminal
+
+    @property
+    def chirp_verbosity(self) -> Verbosity:
+        return self._verbosities.chirp
+
+    @chirp_verbosity.setter
+    def chirp_verbosity(self, verbosity: Verbosity):
+        self._verbosities.chirp = verbosity
+        # TODO: notify ProcessInterface to update terminal
+
+    @property
+    def effective_stdout_verbosity(self) -> Verbosity:
+        return Verbosity(min(self.max_stdout_verbosity.value, self.stdout_verbosity.value))
+
+    @property
+    def effective_chirp_verbosity(self) -> Verbosity:
+        return Verbosity(min(self.max_chirp_verbosity.value, self.chirp_verbosity.value))
+
+    @property
+    def max_effective_verbosity(self):
+        return Verbosity(max(self.effective_stdout_verbosity.value, self.effective_chirp_verbosity.value))
+
+    def log(self, severity: Verbosity, *args):
+        timestamp = Timestamp()
+        thread_id = _threading.get_ident()
+
+        severity_tag = {
+            Verbosity.FATAL:   'TRC',
+            Verbosity.ERROR:   'DBG',
+            Verbosity.WARNING: 'IFO',
+            Verbosity.INFO:    'WRN',
+            Verbosity.DEBUG:   'ERR',
+            Verbosity.TRACE:   'FAT'
+        }[severity]
+
+        if severity.value <= self.effective_stdout_verbosity.value:
+            s1 = '{} [T{:05}] '.format(timestamp, thread_id)
+            s2 = '{} {}: {}'.format(severity_tag, self._component, ''.join([str(arg) for arg in args]))
+
+            with self._lock:
+                self._reset_colours()
+                print(s1, end='')
+                _sys.stdout.flush()
+                self._set_colour(severity)
+                print(s2, end='')
+                _sys.stdout.flush()
+                self._reset_colours()
+                print('')
+                _sys.stdout.flush()
+
+        if severity.value <= self.effective_chirp_verbosity.value:
+            # TODO: log via terminal
+            pass
+
+    def log_trace(self, *args):
+        self.log(Verbosity.TRACE, *args)
+
+    def log_debug(self, *args):
+        self.log(Verbosity.DEBUG, *args)
+
+    def log_info(self, *args):
+        self.log(Verbosity.INFO, *args)
+
+    def log_warning(self, *args):
+        self.log(Verbosity.WARNING, *args)
+
+    def log_error(self, *args):
+        self.log(Verbosity.ERROR, *args)
+
+    def log_fatal(self, *args):
+        self.log(Verbosity.FATAL, *args)
+
+
+Logger._app_logger = Logger()
+Logger._chirp_logger = Logger('PyCHIRP')
+
+
+def log(verbosity: Verbosity, *args):
+    Logger.app_logger.log(verbosity, *args)
+
+
+def log_trace(*args):
+    log(Verbosity.TRACE, *args)
+
+
+def log_debug(*args):
+    log(Verbosity.DEBUG, *args)
+
+
+def log_info(*args):
+    log(Verbosity.INFO, *args)
+
+
+def log_warning(*args):
+    log(Verbosity.WARNING, *args)
+
+
+def log_error(*args):
+    log(Verbosity.ERROR, *args)
+
+
+def log_fatal(*args):
+    log(Verbosity.FATAL, *args)
 
 
 # ======================================================================================================================
@@ -832,3 +1156,126 @@ class AutoConnectingTcpClient:
             return '{} connecting to {}:{}'.format(self.__class__.__name__, self.host, self.port)
         else:
             return '{} (disabled)'.format(self.__class__.__name__)
+
+
+# ======================================================================================================================
+# Terminals
+# ======================================================================================================================
+class _TerminalType(_enum.Enum):
+    DEAF_MUTE = 0
+    PUBLISH_SUBSCRIBE = 1
+    SCATTER_GATHER = 2
+    CACHED_PUBLISH_SUBSCRIBE = 3
+    PRODUCER = 4
+    CONSUMER = 5
+    CACHED_PRODUCER = 6
+    CACHED_CONSUMER = 7
+    MASTER = 8
+    SLAVE = 9
+    CACHED_MASTER = 10
+    CACHED_SLAVE = 11
+    SERVICE = 12
+    CLIENT = 13
+
+
+class GatherFlags(_enum.Enum):
+    NO_FLAGS = 0
+    FINISHED = 1 << 0
+    IGNORED = 1 << 1
+    DEAF = 1 << 2
+    BINDING_DESTROYED = 1 << 3
+    CONNECTION_LOST = 1 << 4
+
+
+_chirp.CHIRP_CreateTerminal.restype = _api_result_handler
+_chirp.CHIRP_CreateTerminal.argtypes = [_ctypes.POINTER(_ctypes.c_void_p), _ctypes.c_void_p, _ctypes.c_int,
+                                        _ctypes.c_char_p, _ctypes.c_uint]
+
+
+class Terminal(Object):
+    def __init__(self, type: _TerminalType, name: str, signature: _typing.Union[Signature, int], *,
+                 leaf: _typing.Optional[Leaf] = None):
+        # TODO: make leaf parameter use ProcessInterface.leaf by default
+        self._leaf = leaf
+        self._name = name
+        self._signature = signature if isinstance(signature, Signature) else Signature(signature)
+
+        handle = _ctypes.c_void_p()
+        _chirp.CHIRP_CreateTerminal(_ctypes.byref(handle), self._leaf._handle, type, self._name.encode('utf-8'),
+                                    self._signature.raw)
+        Object.__init__(self, handle)
+
+    @property
+    def leaf(self) -> Leaf:
+        return self._leaf
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def signature(self):
+        return self._signature
+
+
+class PrimitiveTerminal(Terminal):
+    def __init__(self, *args, **kwargs):
+        Terminal.__init__(self, *args, **kwargs)
+
+
+class ConvenienceTerminal(Terminal):
+    def __init__(self, *args, **kwargs):
+        Terminal.__init__(self, *args, **kwargs)
+
+
+class DeafMuteTerminal(PrimitiveTerminal):
+    def __init__(self, name: str, signature: _typing.Union[Signature, int], *, leaf: _typing.Optional[Leaf] = None):
+        super(DeafMuteTerminal, self).__init__(_TerminalType.DEAF_MUTE, name, signature, leaf=leaf)
+
+
+class PublishSubscribeTerminal(PrimitiveTerminal):
+    def __init__(self, name: str, signature: _typing.Union[Signature, int], *, leaf: _typing.Optional[Leaf] = None):
+        PrimitiveTerminal.__init__(self, _TerminalType.PUBLISH_SUBSCRIBE, name, signature, leaf=leaf)
+
+    def make_message(self):
+        pass
+
+    def publish(self, msg):
+        pass
+
+    def try_publish(self, msg):
+        pass
+
+    def async_receive_message(self, completion_handler):
+        pass
+
+    def cancel_receive_message(self):
+        pass
+
+
+class CachedPublishSubscribeTerminal(PrimitiveTerminal):
+    def __init__(self, name: str, signature: _typing.Union[Signature, int], *, leaf: _typing.Optional[Leaf] = None):
+        PrimitiveTerminal.__init__(self, _TerminalType.CACHED_PUBLISH_SUBSCRIBE, name, signature, leaf=leaf)
+
+    def make_message(self):
+        pass
+
+    def publish(self, msg):
+        pass
+
+    def try_publish(self, msg):
+        pass
+
+    def get_cached_message(self):
+        pass
+
+    def async_receive_message(self, completion_handler):
+        pass
+
+    def cancel_receive_message(self):
+        pass
+
+
+class ScatterGatherTerminal(PrimitiveTerminal):
+    def __init__(self, name: str, signature: _typing.Union[Signature, int], *, leaf: _typing.Optional[Leaf] = None):
+        PrimitiveTerminal.__init__(self, _TerminalType.SCATTER_GATHER, name, signature, leaf=leaf)
